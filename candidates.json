@@ -1,0 +1,56 @@
+{
+  "ministral-base": {
+    "repo": "mistralai/Ministral-3-3B-Base-2512",
+    "revision": "6f9c4b12a95b139af68670a6713616b757923735",
+    "family": "ministral3",
+    "variant": "base"
+  },
+  "ministral-instruct": {
+    "repo": "mistralai/Ministral-3-3B-Instruct-2512-BF16",
+    "revision": "b6d637bef2393152b3da2b2fde72eecdee30557e",
+    "family": "ministral3",
+    "variant": "instruct"
+  },
+  "qwen-base": {
+    "repo": "Qwen/Qwen3-4B-Base",
+    "revision": "906bfd4b4dc7f14ee4320094d8b41684abff8539",
+    "family": "qwen3",
+    "variant": "base"
+  },
+  "qwen-instruct": {
+    "repo": "Qwen/Qwen3-4B",
+    "revision": "1cfa9a7208912126459214e8b04321603b3df60c",
+    "family": "qwen3",
+    "variant": "post-trained (supports thinking and non-thinking)"
+  },
+  "deepseek-distill": {
+    "repo": "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
+    "revision": "ad9f0ae0864d7fbcd1cd905e3c6c5b069cc8b562",
+    "family": "qwen2",
+    "variant": "distilled reasoning"
+  },
+  "deepscaler": {
+    "repo": "agentica-org/DeepScaleR-1.5B-Preview",
+    "revision": "e3f524ce413a296b4d388e7560dd5c82c1c56725",
+    "family": "qwen2",
+    "variant": "reasoning with additional GRPO RL"
+  },
+  "phi-reasoning": {
+    "repo": "microsoft/Phi-4-mini-reasoning",
+    "revision": "0e3b1e2d02ee478a3743abe3f629e9c0cb722e0a",
+    "family": "phi3",
+    "variant": "reasoning with verifiable-reward RL"
+  },
+  "qwen-thinking": {
+    "repo": "Qwen/Qwen3-4B-Thinking-2507",
+    "revision": "768f209d9ea81521153ed38c47d515654e938aea",
+    "family": "qwen3",
+    "variant": "dedicated thinking"
+  },
+  "qwen35-reasoning": {
+    "repo": "Qwen/Qwen3.5-4B",
+    "revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+    "family": "qwen3_5",
+    "variant": "post-trained reasoning; language backbone only"
+  }
+}

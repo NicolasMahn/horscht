@@ -1,0 +1,12 @@
+---
+description: Keep external benchmarks blind and isolated from training and authoring.
+alwaysApply: true
+---
+
+- Do not read, display, summarize, or send external benchmark questions, answers, worked examples, or per-item errors to the user or any authoring, coding, reviewing, or judging LLM agent. Avoid dataset previews and sample-bearing documentation sections.
+- Metadata-only research is allowed: provenance, licenses, versions, split sizes, task descriptions, schemas, and published aggregate results. Record accidental content exposure without repeating it.
+- Deterministic download, parsing, hashing, overlap screening, and evaluation programs may process benchmark content internally. The model under evaluation may receive benchmark inputs for inference only; never feed it gold answers as input. Suppress content-bearing logs, exceptions, and per-item reports from agent-visible output.
+- Keep benchmark artifacts in an isolated evaluation-only location, outside training-data discovery paths. Use explicit allowlists for training inputs and record source revisions and checksums.
+- Do not use external test data for training, data generation, augmentation, early stopping, calibration, prompt selection, hyperparameter selection, or checkpoint selection. Freeze the experiment and selected checkpoint before the final external evaluation.
+- Keep development data separate. Report only aggregate external-test metrics; do not repeatedly tune against those results and continue calling the test untouched. Log evaluations and label any adaptive reuse exploratory.
+- Overlap checks must not reveal benchmark content. Record aggregate overlaps and quarantine matching training IDs separately without rewriting raw data. Passing these checks does not prove absence of semantic overlap or pretrained-model contamination.

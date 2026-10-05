@@ -1,0 +1,134 @@
+{
+  "bundle_manifest_path": "data/external_evaluation/bundle-manifest.json",
+  "bundle_manifest_sha256": "023e948c34198c8fc5231e8109a5ca4f0d8f263d10871328ad3809665eb30343",
+  "candidates": [
+    "full"
+  ],
+  "canonical_item_count": 17874,
+  "canonical_items_path": "data/external_evaluation/canonical/bundle/items.jsonl",
+  "canonical_items_sha256": "3e21e20a79831a99508c7ed8d4f471cf40bb24c4b9c1259e776b217986155fe4",
+  "checkpoint_selection": "Use the completed recovery report only when selected_checkpoint_reload_verified is true; bind its path, hash, selected checkpoint path, and manifest hash in selection_binding.",
+  "contamination_limit": "The exclusion rebind reports zero excluded identifiers/groups, but the attached lexical-overlap report is bound to a previous training snapshot. No fresh exact/lexical overlap audit was run against the current snapshot; semantic overlap and pretrained-model exposure remain unknown.",
+  "exclusion_rebind": {
+    "current_excluded_groups": 0,
+    "current_inference_authorization": "explicit user authorization for this frozen evaluation",
+    "excluded_identifier_counts_by_kind": {
+      "family_ids": 0,
+      "operation_ids": 0,
+      "problem_group_ids": 0,
+      "row_ids": 0,
+      "snapshot_group_ids": 0
+    },
+    "historical_excluded_groups": 0,
+    "original_lock_sha256": "180e9b66d4f8c6e45cdac9057f90fcfb0303d87a9bbfc32de1fd6e3202a7c0b8",
+    "prior_external_inference_authorized_flag": false,
+    "rebound_lock_sha256": "23d7e9a733cf6662da37ebaece9feb8836026dc96209d3e67ad647ffd294b705",
+    "report_path": "runs/current-corpus-2026-10-01/exclusion-protocol-rebind.json",
+    "report_sha256": "57560332584145521723f18fc5e5e0dd8b77c42de7a1ecc8d2fe3aef12b65592",
+    "test_content_opened": false
+  },
+  "expected_group_counts": {
+    "bbh-logical-deduction-five-objects": 250,
+    "bbh-logical-deduction-seven-objects": 250,
+    "bbh-logical-deduction-three-objects": 250,
+    "bbh-tracking-shuffled-objects-five-objects": 250,
+    "bbh-tracking-shuffled-objects-seven-objects": 250,
+    "bbh-tracking-shuffled-objects-three-objects": 250,
+    "belebele-deu_Latn": 900,
+    "belebele-eng_Latn": 900,
+    "belebele-fra_Latn": 900,
+    "belebele-spa_Latn": 900,
+    "belebele-zho_Hans": 900,
+    "mmlu-pro-test": 11874
+  },
+  "inference": {
+    "attention_backend": "flash",
+    "backbone_autocast": "bfloat16; cache disabled",
+    "batch_size": 1,
+    "candidate_order": [
+      "full"
+    ],
+    "choice_head_capacity": 265,
+    "choice_mask": "Mask logits at indices greater than or equal to the row's option count.",
+    "input_limit_tokens": 32768,
+    "kind": "decision-head multiple-choice classification; no text generation",
+    "parameters_dtype": "float32",
+    "pooling": "last non-padding token",
+    "prediction": "Argmax over valid choice logits; ties resolve to the lowest zero-based index.",
+    "tokenizer": "Use the tokenizer saved in each selected checkpoint; require identical tokenizer artifact hashes across candidates.",
+    "truncation": false
+  },
+  "model_id": "Qwen/Qwen3-4B",
+  "model_key": "qwen-instruct",
+  "model_revision": "1cfa9a7208912126459214e8b04321603b3df60c",
+  "prompt_format": {
+    "choice_labels": "Zero-based numeric labels.",
+    "choice_order": "Canonical source order after the pinned deterministic adapter; do not shuffle, relabel, or permute.",
+    "empty_context": "Keep the Context: line even when context is empty.",
+    "ending": "Selected choice:",
+    "fields_only": [
+      "context",
+      "question",
+      "options"
+    ],
+    "gold_answer_and_metadata_excluded": true,
+    "id": "plain-context-question-choices-v1",
+    "implementation": "experiment.format_input",
+    "rationales_or_cot_excluded": true
+  },
+  "protocol_id": "independent-mcq-current-full-2026-10-v1",
+  "report_gate": "Write final aggregate metrics only after both locked candidates finish the exact canonical item set.",
+  "resumption": {
+    "cursor": "Canonical bundle file ordinal; persist aggregate sufficient statistics atomically after each committed item.",
+    "normal_pause": "Honor stop requests at the next item boundary and resume from the next uncommitted ordinal.",
+    "state_contains_item_ids_or_predictions": false,
+    "unclean_interruption": "Never replay an item whose inference may have started; halt with an indeterminate safe status if an in-flight marker remains.",
+    "write_ahead_inflight_marker": true
+  },
+  "run_paths": {
+    "full": "runs/current-corpus-2026-10-01/recovery-2026-10-04/full"
+  },
+  "schema_version": "blind-external-evaluation-protocol-v1",
+  "scoring": {
+    "groups": "Overall plus each pinned source slice; report the five Belebele language slices separately and do not describe translated variants as independent problems.",
+    "metrics": [
+      "examples",
+      "correct",
+      "accuracy",
+      "negative_log_likelihood",
+      "multiclass_brier_score"
+    ],
+    "multiclass_brier_score": "Mean sum_j((p_j - y_j)^2) over valid choices, where y is one-hot gold.",
+    "negative_log_likelihood": "Mean -log(p_gold) for the one-hot gold choice.",
+    "no_hyperparameter_or_prompt_tuning": true,
+    "no_per_item_predictions_or_errors_in_reports": true,
+    "no_temperature_scaling_or_calibration": true,
+    "primary_metric": "accuracy",
+    "probabilities": "Softmax over valid masked choice logits; no temperature scaling or calibration.",
+    "publish_aggregate_only_after_both_candidates_complete": true,
+    "uniform_baseline": "Per-item expected accuracy 1/K, NLL log(K), and multiclass Brier score 1 - 1/K for K valid choices; aggregate by the same source slices."
+  },
+  "selection_binding": {
+    "best_checkpoint_relative": "../../full/checkpoints/update-00004608-epoch-000-next-004608",
+    "checkpoint_manifest_sha256": "5fb4abfecf515bfce24ba8c4c2ebdeb31ceadde61cb4154f9c0ce54c041f1b44",
+    "checkpoint_source_run_manifest_path": "runs/current-corpus-2026-10-01/full/manifest.json",
+    "checkpoint_source_run_manifest_sha256": "bad86b32ab995da3cd3ec414a75eb8bc94b11868e10deb4067286ba70f02220e",
+    "kind": "completed-development-report",
+    "report_path": "runs/current-corpus-2026-10-01/recovery-2026-10-04/full/report.json",
+    "report_sha256": "0ac21024567606118b3ac64309df9eeec4446dc724a8f9806c296a274e1ae825",
+    "run_manifest_sha256": "22230b6bdb033bf27f63f21881a2dd4907adf641f86a4e59788b0a456f5c5606",
+    "selected_checkpoint_path": "runs/current-corpus-2026-10-01/full/checkpoints/update-00004608-epoch-000-next-004608"
+  },
+  "suite_reuse": {
+    "canonical_items_sha256": "3e21e20a79831a99508c7ed8d4f471cf40bb24c4b9c1259e776b217986155fe4",
+    "comparison_note": "Same canonical suite, base model revision, formatter, and scoring method as the earlier evaluation. The selected current-corpus checkpoint and training snapshot differ; comparisons are descriptive, not causal. No test results were used for selection or tuning.",
+    "previous_protocol_sha256": "ebb801b6b364e6307cc8c34b8ff76b8bcbc686c6cf2b8939f0d7860dbd08e341",
+    "previous_result_path": "data/external_evaluation/results/paired-overnight-2026-09-30/blind-aggregate-result.json",
+    "previous_result_sha256": "0ef5e352392e693c7d673765f9494ccac792847fdcca05453215c444dfc39b12",
+    "previous_system_test_lock_sha256": "180e9b66d4f8c6e45cdac9057f90fcfb0303d87a9bbfc32de1fd6e3202a7c0b8",
+    "status": "reused_suite_comparison_not_virgin"
+  },
+  "system_test_lock_path": "data/external_evaluation/system-test-lock-current-corpus-2026-10-01.json",
+  "system_test_lock_sha256": "23d7e9a733cf6662da37ebaece9feb8836026dc96209d3e67ad647ffd294b705",
+  "training_snapshot_manifest_sha256": "eac9afe4f6ec25e0ea27237fcd3b59e656e6cab426d3642082aae5c99e429f57"
+}

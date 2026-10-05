@@ -1,0 +1,366 @@
+[
+  {
+    "candidate_id": "Cde3cf5cfe0d4cb7b24854654",
+    "dimensions": {
+      "evidence_support": "fail",
+      "unique_valid_choices": "pass",
+      "probability_math": "pass",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [
+      "insufficient_exact_citations"
+    ],
+    "reasons": [
+      "The 36 Table 3 means are present in the source, but the cited spans show only selected values and do not establish the complete 24-below/12-at-or-above count."
+    ],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C3a76c4d6b0e17fe1e98521b2",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "pass",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C95fed65c26a9e86cfed58b43",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C3fbdb144b92881fd4c8a4780",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "Ccb7dd1f557f2338fe1cdf2a6",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "pass",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "Cd8878da69cf40dab3f0d7744",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "Cc766bda4789ca16cc17d2207",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "pass",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C197dd10a70f54f88826c8acc",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C2afed3facf44693b50974160",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "pass",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C75262f80a4e177447e760655",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C22ccb8480c4caa6d01e18add",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C6ae2a546c1567fd7dbe84555",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "Cfe38e0f093f83eb231744915",
+    "dimensions": {
+      "evidence_support": "fail",
+      "unique_valid_choices": "pass",
+      "probability_math": "pass",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [
+      "insufficient_exact_citations"
+    ],
+    "reasons": [
+      "The cited spans cover selected Table 2 means, not all 24 records; two of the 16 above-baseline values are not cited, so the 16/8 total is not established by these spans."
+    ],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "Ce816c2e175659ad6c557e007",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "Cf72ce566c2528db4c545e07e",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "pass",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "Cbcd8156bce9e4c3ba26db7e9",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "pass",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "Cfdc879f942209f4e0455d059",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "pass",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C371cb44e85065e6c740b84dc",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C8204431569a28e170524b112",
+    "dimensions": {
+      "evidence_support": "fail",
+      "unique_valid_choices": "pass",
+      "probability_math": "pass",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [
+      "insufficient_exact_citations"
+    ],
+    "reasons": [
+      "The cited spans enumerate selected Table 3 values rather than all 36 means needed to verify the claimed 21/15 split."
+    ],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C620e42f09a74426cc984d7b6",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C2210b666f3de858f8ec2f893",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "pass",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "Cf3d5f632d5f6d2f326eb505f",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "pass",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  }
+]

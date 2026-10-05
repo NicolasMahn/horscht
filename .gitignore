@@ -1,0 +1,14 @@
+# Environments and caches
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
+# Data, training runs, and experiment outputs stay local
+data/
+runs/
+results/
+dataset_audit/audit-*/
+
+# Generated reports (templates are tracked)
+report*.html

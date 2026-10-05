@@ -1,0 +1,379 @@
+[
+  {
+    "candidate_id": "C371a3ac5ff3ae05129c0b98d",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "pass",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C3b9fd540e0e662c3192c1e9a",
+    "dimensions": {
+      "evidence_support": "fail",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "pass",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [
+      "insufficient_exact_citations"
+    ],
+    "reasons": [
+      "The cited spans support pocket occupancy and UV-visible binding affinity, but omit the answer’s specific residue-interaction and stable-complex claims."
+    ],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C8388068961bf9bbad97e57b8",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "pass",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C761c36d5682e878f840a8b34",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C2c91e0c7c72f0fbcda5967b9",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "pass",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C12c5da44f2519a0f79006c6e",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "Ce0f4c66e251a755f6c630481",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C860a21e5d8885f31394f7b8f",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C8ccfdd0e5ac1f4b7caa45fe8",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C48c0052238e517f5e71e313d",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C5529bbbddb08858cf50fc9f2",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "pass",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "Ca0c12f285c69dfd4ebb280c6",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "fail"
+    },
+    "defects": [
+      "duplicate_question"
+    ],
+    "reasons": [
+      "This repeats the same citral–htf binding conclusion and computational/spectroscopic synthesis as the earlier canonical candidate C3b9fd540e0e662c3192c1e9a."
+    ],
+    "duplicate_of": "C3b9fd540e0e662c3192c1e9a"
+  },
+  {
+    "candidate_id": "C0d7918934a10d5ad01707775",
+    "dimensions": {
+      "evidence_support": "fail",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [
+      "insufficient_exact_citations"
+    ],
+    "reasons": [
+      "The answer also claims a higher live-birth rate, while its cited spans support only the pregnancy-duration comparison."
+    ],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C1311e043c3ad53dd81c84843",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C3f3ee77dd5c186bad8326803",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "pass",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "Ce2044cb0a65b79c295d78cee",
+    "dimensions": {
+      "evidence_support": "fail",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "fail",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [
+      "insufficient_exact_citations",
+      "incomplete_integration_evidence"
+    ],
+    "reasons": [
+      "The citations show a mouse PTB result and future-research framing, but do not cover the answer’s claimed promoter/cell/placenta versus docking/spectroscopy evidence comparison; the cited pair does not support the complete cross-document answer."
+    ],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C0a0f91a276ebffe48434dc89",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "pass",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "Ca3abf9cb50ce3751b6df41c8",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "fail"
+    },
+    "defects": [
+      "duplicate_question"
+    ],
+    "reasons": [
+      "This repeats the same source-unanswerable question about clinical cognitive or treatment outcomes in patients receiving citral as the earlier canonical candidate C1311e043c3ad53dd81c84843."
+    ],
+    "duplicate_of": "C1311e043c3ad53dd81c84843"
+  },
+  {
+    "candidate_id": "C34a58034b780f55511bf9236",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "Cf9fdc05218d38685550b5d36",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "pass",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "C4edf10ee5a1ad4bf458bb164",
+    "dimensions": {
+      "evidence_support": "fail",
+      "unique_valid_choices": "pass",
+      "probability_math": "pass",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [
+      "insufficient_exact_citations"
+    ],
+    "reasons": [
+      "The table citation is an unreadable fragment from one row, while the answer claims a distribution over nine signs across three temperatures; the cited spans do not establish all records or the 6/3 totals."
+    ],
+    "duplicate_of": null
+  },
+  {
+    "candidate_id": "Cc4d61e26161e69ad0d47ae4b",
+    "dimensions": {
+      "evidence_support": "pass",
+      "unique_valid_choices": "pass",
+      "probability_math": "not_applicable",
+      "idk": "pass",
+      "source_language": "pass",
+      "integration": "not_applicable",
+      "task_adherence": "pass",
+      "novelty": "pass"
+    },
+    "defects": [],
+    "reasons": [],
+    "duplicate_of": null
+  }
+]

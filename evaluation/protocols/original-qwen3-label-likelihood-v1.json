@@ -1,0 +1,152 @@
+{
+  "schema_version": "original-lm-blind-protocol-v1",
+  "protocol_id": "original-qwen3-4b-label-likelihood-2026-10-v1",
+  "candidate": "unedited_original_lm_head",
+  "model_id": "Qwen/Qwen3-4B",
+  "model_revision": "1cfa9a7208912126459214e8b04321603b3df60c",
+  "system_test_lock_path": "data/external_evaluation/system-test-lock-current-corpus-2026-10-01.json",
+  "system_test_lock_sha256": "23d7e9a733cf6662da37ebaece9feb8836026dc96209d3e67ad647ffd294b705",
+  "bundle_manifest_path": "data/external_evaluation/bundle-manifest.json",
+  "bundle_manifest_sha256": "023e948c34198c8fc5231e8109a5ca4f0d8f263d10871328ad3809665eb30343",
+  "canonical_items_path": "data/external_evaluation/canonical/bundle/items.jsonl",
+  "canonical_items_sha256": "3e21e20a79831a99508c7ed8d4f471cf40bb24c4b9c1259e776b217986155fe4",
+  "canonical_item_count": 17874,
+  "training_snapshot_manifest_sha256": "eac9afe4f6ec25e0ea27237fcd3b59e656e6cab426d3642082aae5c99e429f57",
+  "expected_group_counts": {
+    "bbh-logical-deduction-five-objects": 250,
+    "bbh-logical-deduction-seven-objects": 250,
+    "bbh-logical-deduction-three-objects": 250,
+    "bbh-tracking-shuffled-objects-five-objects": 250,
+    "bbh-tracking-shuffled-objects-seven-objects": 250,
+    "bbh-tracking-shuffled-objects-three-objects": 250,
+    "belebele-deu_Latn": 900,
+    "belebele-eng_Latn": 900,
+    "belebele-fra_Latn": 900,
+    "belebele-spa_Latn": 900,
+    "belebele-zho_Hans": 900,
+    "mmlu-pro-test": 11874
+  },
+  "exclusion_rebind": {
+    "current_excluded_groups": 0,
+    "current_inference_authorization": "explicit user authorization for this frozen evaluation",
+    "excluded_identifier_counts_by_kind": {
+      "family_ids": 0,
+      "operation_ids": 0,
+      "problem_group_ids": 0,
+      "row_ids": 0,
+      "snapshot_group_ids": 0
+    },
+    "historical_excluded_groups": 0,
+    "original_lock_sha256": "180e9b66d4f8c6e45cdac9057f90fcfb0303d87a9bbfc32de1fd6e3202a7c0b8",
+    "prior_external_inference_authorized_flag": false,
+    "rebound_lock_sha256": "23d7e9a733cf6662da37ebaece9feb8836026dc96209d3e67ad647ffd294b705",
+    "report_path": "runs/current-corpus-2026-10-01/exclusion-protocol-rebind.json",
+    "report_sha256": "57560332584145521723f18fc5e5e0dd8b77c42de7a1ecc8d2fe3aef12b65592",
+    "test_content_opened": false
+  },
+  "prompt": {
+    "id": "qwen3-chat-letter-readout-no-thinking-v1",
+    "system_message": "Select the best answer. Reply with exactly one uppercase option letter and no explanation.",
+    "user_template": "Context:\\n{context}\\n\\nQuestion:\\n{question}\\n\\nOptions:\\nA. {option_0}\\n...\\n{label}. {option_n}\\n\\nReply with one option letter only.",
+    "chat_template": "tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True, enable_thinking=False)",
+    "enable_thinking": false,
+    "generation_prompt": true,
+    "candidate_labels": "Uppercase A, B, ... in canonical source option order; labels are appended directly after the chat template's assistant prefix.",
+    "candidate_label_tokenization": "For every item and every valid choice, tokenize prompt and prompt+label; require prompt tokens to remain an exact prefix and exactly one additional token. Require candidate token IDs to be unique within the item.",
+    "input_fields_only": [
+      "context",
+      "question",
+      "options"
+    ],
+    "context_line": "Always keep the Context line, including for an empty context.",
+    "gold_answer_and_metadata_excluded": true,
+    "choice_order": "Keep canonical source order; do not shuffle, relabel, or permute the options themselves.",
+    "rationales_or_cot_excluded": true,
+    "comparison_note": "Same context, question, option text, and source order; chat wrapper, letter labels, answer instruction, and LM-head readout differ from the trained numeric-choice decision-head prompt. This is an end-to-end comparison, not a pure backbone ablation."
+  },
+  "inference": {
+    "kind": "single-token candidate-label likelihood from the original causal-LM output head",
+    "generated_tokens": 0,
+    "input_limit_tokens": 32768,
+    "max_input_tokens": 32768,
+    "truncation": false,
+    "batch_size": 1,
+    "parameters_dtype": "bfloat16",
+    "attention_backend": "sdpa",
+    "device": "cuda",
+    "device_map": "cuda",
+    "local_files_only": true,
+    "trust_remote_code": false,
+    "use_cache": false,
+    "torch_num_threads": 8,
+    "gpu_allocation_cap_gib": 44,
+    "minimum_model_memory_gib": 10,
+    "reserve_memory_gib": 12,
+    "model_weights_and_original_lm_head_unchanged": true
+  },
+  "runtime": {
+    "torch_version": "2.11.0+rocm10.0.0",
+    "transformers_version": "5.17.0",
+    "python_version": "3.12.3",
+    "container_image_id": "896bcf7217a72aa39f91a25223152a78dc5e8ec8ae306f980c42881361f66d15",
+    "container_digest": "sha256:a77c255f56870171d4ae2a929480affe38d9a213e6dbeaf905ab9da1344adc2a"
+  },
+  "scoring": {
+    "primary_metric": "accuracy",
+    "metrics": [
+      "examples",
+      "correct",
+      "accuracy",
+      "negative_log_likelihood",
+      "multiclass_brier_score",
+      "uniform_baseline"
+    ],
+    "probabilities": "Softmax over the valid candidate-letter logits only; these are restricted-choice probabilities, not full-vocabulary probabilities.",
+    "negative_log_likelihood": "Mean -log(p_gold) for the one-hot gold choice under the restricted candidate-label distribution.",
+    "multiclass_brier_score": "Mean sum_j((p_j - y_j)^2) over valid choices, where y is one-hot gold.",
+    "uniform_baseline": "Per-item expected accuracy 1/K, NLL log(K), and multiclass Brier score 1 - 1/K; aggregate by the same source slices and diagnostic strata.",
+    "temperature_scaling": false,
+    "calibration": false,
+    "prompt_or_hyperparameter_tuning": false,
+    "checkpoint_selection": false,
+    "per_item_predictions_or_errors_in_reports": false,
+    "publish_only_after_complete_candidate": true,
+    "exploratory_diagnostics": {
+      "choice_count_bins": [
+        "2-4",
+        "5-8",
+        "9-16",
+        "17+"
+      ],
+      "input_token_bins": [
+        "<=256",
+        "257-512",
+        "513-1024",
+        "1025-2048",
+        ">2048"
+      ],
+      "cross_tabs": "source_slice x choice_count_bin x input_token_bin; source_slice x exact_choice_count x input_token_bin",
+      "token_count_definition": "Actual tokenizer input length for the full no-thinking chat prompt before the candidate label continuation.",
+      "reuse_label": "Exploratory reused-test diagnostics; descriptive only and unavailable for model, training, prompt, or checkpoint selection."
+    }
+  },
+  "resumption": {
+    "cursor": "Canonical file ordinal; aggregate sufficient statistics by source, choice-count bin, token-count bin, and declared cross-tabs only.",
+    "atomic_after_each_item": true,
+    "cursor_contains_item_ids_or_predictions": false,
+    "inflight_marker": true,
+    "unclean_interruption": "If an in-flight item marker remains, stop as indeterminate and do not replay it.",
+    "normal_stop": "Pause only after the current item has committed; resume from the next ordinal."
+  },
+  "comparison_limit": "A comparison with the trained decision head is end-to-end because prompt wrappers, choice labels, and readout layers differ. It does not isolate the effect of training the backbone or prove absence of pretraining contamination.",
+  "suite_reuse": {
+    "status": "reused_suite_exploratory_comparison_not_virgin",
+    "canonical_items_sha256": "3e21e20a79831a99508c7ed8d4f471cf40bb24c4b9c1259e776b217986155fe4",
+    "current_trained_head_result_path": "data/external_evaluation/results/current-corpus-benchmark-2026-10-04-final/blind-aggregate-result.json",
+    "current_trained_head_result_sha256": "e5504880e813360af002511796b3500839107f94cfb4bc87a03682bfa9239119",
+    "older_paired_run_result_path": "data/external_evaluation/results/paired-overnight-2026-09-30/blind-aggregate-result.json",
+    "older_paired_run_result_sha256": "0ef5e352392e693c7d673765f9494ccac792847fdcca05453215c444dfc39b12",
+    "comparison_note": "The suite has prior inference reuse. This baseline is a new fixed original-model method; no test outcome may change its prompt or scoring. Compare aggregates as exploratory end-to-end results only."
+  },
+  "contamination_limit": "The current lock reports zero excluded identifiers/groups; no fresh exact/lexical audit was run against the current training snapshot. Semantic overlap and pretrained-model exposure are unknown."
+}

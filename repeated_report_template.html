@@ -1,0 +1,47 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Horscht · Ten-seed evaluation</title>
+<style>
+@@THEME@@
+*{box-sizing:border-box}body{margin:0;background:var(--canvas);color:var(--ink);font:16px/1.55 system-ui,sans-serif}
+main{max-width:1500px;margin:auto;padding:32px}h1{font-size:30px;margin:0}h2{font-size:20px;margin:0 0 10px}p{margin:10px 0 16px}
+.small{font-size:14px;color:var(--muted)}.surface{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:20px;margin-top:20px;min-width:0}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.chart{padding:20px 12px 4px}.chart h2{padding-left:12px}
+.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;padding:12px;border-bottom:1px solid var(--line);vertical-align:top;font-variant-numeric:tabular-nums}
+thead th{color:var(--muted);font-weight:500;white-space:nowrap}.summary th,.summary td{white-space:nowrap}tbody th{font-weight:600}
+summary{cursor:pointer}details>summary{font-weight:600}details ul{padding-left:20px}.decisions{min-width:1000px}.decisions th:first-child{width:38%;font-weight:400}.decisions td{min-width:140px}
+.note{border-left:3px solid var(--blue);padding-left:16px;color:var(--muted)}code{overflow-wrap:anywhere}
+button{background:var(--paper);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:10px 14px;cursor:pointer;font:inherit}button:focus-visible,summary:focus-visible{outline:3px solid var(--blue)}
+footer{margin-top:24px;color:var(--muted);font-size:14px}a{color:var(--blue)}@media(max-width:850px){main{padding:20px 12px}.grid{grid-template-columns:1fr}.surface{padding:14px}.chart{padding:14px 4px}}
+</style><script>@@PLOTLY@@</script></head><body><main>
+<p><a href="/transfer">Check wording and answer-order transfer</a></p>
+<p><a href="/size">Compare 16 versus 64 training questions</a></p>
+<h1>Horscht · @@COUNT@@ seeds per model</h1>
+<p>@@MODELS@@ frozen backbones · @@TOTAL@@ freshly initialized heads · @@TRAIN@@ training questions · @@PROBE@@ fixed exploratory probes</p>
+<p class="note">These repeats measure sensitivity to head initialization. They reuse the same questions and frozen features: @@TOTAL@@ runs do not create new independent test questions. No reliable generalization ranking follows from this tiny probe set.</p>
+<section class="surface"><h2>What we select for</h2>
+<p>Maximize <strong>mean final choice accuracy on the development probes</strong> across the same ten seeds (42–51). If accuracy ties exactly, prefer lower mean final probe cross-entropy; if both tie, keep the tie. Rankings use unrounded measurements.</p>
+<p class="small">Eligibility requires all ten seeds, successful backbone reload verification, and every head passing overfitting and reload checks. An absent or failed candidate keeps the comparison incomplete. This rule was fixed at @@POLICY_LOCKED@@, after inspecting the first four models and before results from the five newly added reasoning candidates.</p>
+@@SELECTION@@
+<p class="note">This is a provisional development-probe selection. These eight questions have already been inspected, so selecting on them does not establish performance on an untouched test set. Training minimizes cross-entropy on the training questions; model selection prioritizes correct choices on the probes. Probe scores never control gradient updates or stopping.</p>
+</section>
+<div class="surface scroll"><table class="summary"><thead><tr><th>Model</th><th>Overfit + reload</th><th>Final training loss · mean ± SD</th><th>Stop update · mean (range)</th><th>Probe accuracy · mean ± SD</th><th>Probe accuracy range</th><th>Probe loss · mean ± SD</th></tr></thead><tbody>@@SUMMARY@@</tbody></table></div>
+<p class="small">SD is the sample standard deviation across seeds; pp means percentage points. These are descriptive spreads, not confidence intervals. Each seed is evaluated at its own training-only stopping point.</p>
+<div class="grid"><section class="surface chart"><h2>Training loss</h2>@@LOSS@@</section><section class="surface chart"><h2>Probe loss</h2>@@PROBE_LOSS@@</section></div>
+<div class="grid"><section class="surface chart"><h2>Training accuracy</h2>@@ACCURACY@@</section><section class="surface chart"><h2>Probe accuracy</h2>@@PROBE_ACCURACY@@</section></div>
+<p class="note">Solid curves show seed means; shaded bands show ±1 SD, clipped to valid metric bounds. After a run stops, its final measurement is held constant for aggregation so the mean always includes all @@COUNT@@ seeds. Use each chart’s model selector to isolate a model or inspect its individual runs. Individual curves end at their own stops. Hover identifies each seed. Dotted lines show uniform-choice baselines. No smoothing is applied.</p>
+@@RUN_TABLES@@
+<section class="surface"><h2>Individual questions across seeds</h2><p class="small">Correct runs / @@COUNT@@. Expand a cell to inspect each seed’s selected answer. Probe questions appear first.</p>
+<div class="scroll"><table class="decisions"><thead><tr><th>Question, choices and answer</th>@@MODEL_HEADERS@@</tr></thead><tbody>@@DECISIONS@@</tbody></table></div></section>
+<section class="surface"><h2>What changed between runs</h2>
+<p>Only the head initialization seed changed: @@SEEDS@@. Each run starts from a new head and optimizer. Data order, inputs, features, optimizer settings and the stopping rule stay fixed. No seed was selected or discarded based on probe performance.</p>
+<p class="small">@@SETTINGS@@. Full-batch training stops at a ten-update checkpoint when training accuracy is 100% and loss ≤ 0.02, or at the maximum update count. Probe measurements never affect training or stopping. Output capacity remains 265; these questions exercise answer positions 0–3.</p>
+<p class="small">The cached backbone features previously passed fresh-process verification. Every newly saved head was reloaded and checked for identical logits on all questions. The backbones were not retrained or reloaded for each seed. This experiment measures head-training variability, not feature-extraction variability.</p>
+<details><summary>Reproducibility</summary><ul>@@SOURCES@@</ul><p>The JSON includes every measured update, per-seed predictions and probabilities, feature hashes, model revisions and saved-head paths.</p></details></section>
+<footer><button id="download" type="button">Download all measurements JSON</button><p>Generated @@GENERATED@@ · Self-contained; no network requests required.</p></footer>
+</main><script id="measurements" type="application/json">@@RAW@@</script>
+<script>
+document.getElementById('download').addEventListener('click',()=>{
+ const blob=new Blob([document.getElementById('measurements').textContent],{type:'application/json'});
+ const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='horscht-ten-seeds.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+});
+</script></body></html>

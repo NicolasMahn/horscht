@@ -1,0 +1,28 @@
+[project]
+name = "horscht"
+version = "0.1.0"
+description = "Small, reproducible experiments in direct decision models"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "torch>=2.6,<3",
+  "transformers>=5,<6",
+  "mistral-common>=1.8.6",
+  "huggingface-hub>=1,<2",
+  "plotly>=6,<7",
+]
+
+[dependency-groups]
+dev = ["pytest>=8,<10"]
+evaluation = ["pyarrow>=18"]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

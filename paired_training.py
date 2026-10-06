@@ -377,7 +377,7 @@ def main() -> int:
     run.add_argument("--snapshot", type=Path, required=True)
     run.add_argument("--selection", type=Path, required=True)
     run.add_argument("--output", type=Path, required=True)
-    run.add_argument("--arm", choices=["head", "full"], required=True)
+    run.add_argument("--arm", choices=["head", "full", "last-block"], required=True)
     run.add_argument("--head-learning-rate", type=float, default=.001)
     run.add_argument("--backbone-learning-rate", type=float, default=.00001)
     run.add_argument("--accumulation", type=int, default=16)

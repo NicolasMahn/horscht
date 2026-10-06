@@ -145,13 +145,14 @@ def _load_protocol(path: Path = PROTOCOL_PATH) -> tuple[dict[str, Any], str]:
         "independent-mcq-full-head-2026-09-v1": ["full", "head"],
         "independent-mcq-current-full-2026-10-v1": ["full"],
         "independent-mcq-current-head-2026-10-v1": ["head"],
+        "independent-mcq-current-last-block-2026-10-v1": ["last-block"],
     }
     if not isinstance(candidates, list) or protocol_id not in allowed_protocols or candidates != allowed_protocols[protocol_id]:
         raise BlindEvaluationError("protocol_candidate_contract_invalid")
     if not isinstance(protocol.get("run_paths"), dict) or set(protocol["run_paths"]) != set(candidates):
         raise BlindEvaluationError("protocol_run_paths_invalid")
     selection_binding = protocol.get("selection_binding")
-    if protocol_id in {"independent-mcq-current-full-2026-10-v1", "independent-mcq-current-head-2026-10-v1"}:
+    if protocol_id in {"independent-mcq-current-full-2026-10-v1", "independent-mcq-current-head-2026-10-v1", "independent-mcq-current-last-block-2026-10-v1"}:
         required_binding_fields = {
             "kind", "report_path", "report_sha256", "best_checkpoint_relative",
             "selected_checkpoint_path", "checkpoint_manifest_sha256", "run_manifest_sha256",
@@ -379,11 +380,11 @@ def _selected_candidate(arm: str, run_path: Path, protocol: Mapping[str, Any]) -
         or manifest_copy.get("revision") != model_spec[1]
         or manifest_copy.get("formatter") != protocol["prompt_format"]["id"]
         or manifest_copy.get("max_tokens") != protocol["inference"]["input_limit_tokens"]
-        or checkpoint_manifest.get("include_backbone") is not (arm == "full")
+        or checkpoint_manifest.get("include_backbone") is not (arm in {"full", "last-block"})
         or not isinstance(files, dict)
         or not any(name.startswith("tokenizer/") for name in files)
         or not any(name.startswith("backbone_config/") for name in files)
-        or (arm == "full") != ("backbone.pt" in files)
+        or (arm in {"full", "last-block"}) != ("backbone.pt" in files)
         or "head.pt" not in files
     ):
         raise BlindEvaluationError("candidate_checkpoint_protocol_mismatch")
@@ -396,6 +397,25 @@ def _selected_candidate(arm: str, run_path: Path, protocol: Mapping[str, Any]) -
         if manifest_copy.get(field) != checkpoint_source_manifest.get(field):
             raise BlindEvaluationError("candidate_checkpoint_run_manifest_mismatch")
     _verify_checkpoint_files(checkpoint_dir, files)
+    if arm == "last-block":
+        config = _read_object(checkpoint_dir / "backbone_config" / "config.json", "candidate_checkpoint_config_invalid")
+        layer_count = config.get("num_hidden_layers")
+        names = checkpoint_source_manifest.get("trainable_backbone_parameter_names")
+        count = checkpoint_source_manifest.get("trainable_backbone_parameter_count")
+        if (
+            type(layer_count) is not int or layer_count < 1
+            or checkpoint_source_manifest.get("backbone_training_scope") != "last-block"
+            or checkpoint_source_manifest.get("backbone_trainable") is not True
+            or not isinstance(names, list) or not names
+            or any(not isinstance(name, str) or not name.startswith(f"layers.{layer_count - 1}.") for name in names)
+            or len(names) != len(set(names))
+            or type(count) is not int or count <= 0
+        ):
+            raise BlindEvaluationError("candidate_last_block_scope_invalid")
+        for field in ("backbone_training_scope", "backbone_trainable", "trainable_backbone_parameter_names", "trainable_backbone_parameter_count"):
+            if (manifest_copy.get(field) != checkpoint_source_manifest.get(field)
+                    or run_manifest.get(field) != checkpoint_source_manifest.get(field)):
+                raise BlindEvaluationError("candidate_checkpoint_run_manifest_mismatch")
     tokenizer_hashes = {name: digest for name, digest in files.items() if name.startswith("tokenizer/")}
     if not tokenizer_hashes:
         raise BlindEvaluationError("candidate_checkpoint_tokenizer_missing")
@@ -544,7 +564,7 @@ def _verify_selection_binding(
             **verify_generation_receipt(receipt_path, selected_candidates),
             "kind": "generation-reflection-receipt",
         }
-    if len(selected_candidates) != 1 or set(selected_candidates) - {"full", "head"} or not isinstance(binding, Mapping):
+    if len(selected_candidates) != 1 or set(selected_candidates) - {"full", "head", "last-block"} or not isinstance(binding, Mapping):
         raise BlindEvaluationError("protocol_selection_binding_invalid")
     candidate = next(iter(selected_candidates.values()))
     checks = {
@@ -1196,6 +1216,8 @@ def _model_scorer(torch: Any, tokenizer: Any, backbone: Any, head: Any, protocol
 
 def _load_protocol_candidates(protocol: Mapping[str, Any], full_run: Path, head_run: Path) -> dict[str, dict[str, Any]]:
     run_paths = {"full": full_run, "head": head_run}
+    if "last-block" in protocol["candidates"]:
+        run_paths["last-block"] = _repo_directory(protocol["run_paths"]["last-block"], "candidate_run_path_invalid")
     return {
         arm: _selected_candidate(arm, run_paths[arm], protocol)
         for arm in protocol["candidates"]

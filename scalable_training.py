@@ -74,6 +74,27 @@ def model_state_sha256(module):
     return digest.hexdigest()
 
 
+def configure_backbone_training(backbone, arm):
+    """Limit autograd to the selected scope; a frozen prefix builds no graph."""
+    if arm not in {"head", "full", "last-block"}:
+        raise ValueError(f"Unknown training arm: {arm}")
+    backbone.requires_grad_(arm == "full")
+    if arm == "last-block":
+        if not hasattr(backbone, "layers") or not backbone.layers:
+            raise ValueError("Last-block training requires a decoder with explicit layers")
+        backbone.layers[-1].requires_grad_(True)
+        prefix = f"layers.{len(backbone.layers) - 1}."
+        expected = {name for name, _ in backbone.named_parameters() if name.startswith(prefix)}
+        actual = {name for name, parameter in backbone.named_parameters() if parameter.requires_grad}
+        if not expected or actual != expected:
+            raise ValueError("Last-block trainable parameter allowlist mismatch")
+    if arm == "full":
+        backbone.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+    else:
+        backbone.eval()
+    return [name for name, parameter in backbone.named_parameters() if parameter.requires_grad]
+
+
 def checkpoint_space_bytes(backbone, head, optimizer, include_backbone):
     def tensor_bytes(value):
         if isinstance(value, torch.Tensor):
@@ -391,21 +412,19 @@ def _run_scalable_arm(args) -> int:
     parameter_bytes = sum(parameter.numel() for parameter in skeleton.parameters()) * 4
     del skeleton
     full = args.arm == "full"
+    trained_backbone = args.arm != "head"
     require_memory(parameter_bytes * (2 if full else 1) + 6 * 1024**3, args.reserve_gib, args.device)
     load_options = {"device_map": "cuda"} if args.device == "cuda" else {}
     backbone = AutoModel.from_pretrained(candidate["repo"], revision=candidate["revision"], local_files_only=True,
                                          dtype=torch.float32, attn_implementation="sdpa", **load_options).to(args.device)
     backbone._horscht_attention_backend = attention_backend
-    backbone.requires_grad_(full)
-    if full:
-        backbone.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
-    else:
-        backbone.eval()
+    trainable_backbone_names = configure_backbone_training(backbone, args.arm)
     torch.manual_seed(args.seed)
     head = DecisionHead(backbone.config.hidden_size).to(args.device)
     groups = [{"params": head.parameters(), "lr": args.head_learning_rate}]
-    if full:
-        groups.append({"params": backbone.parameters(), "lr": args.backbone_learning_rate})
+    if trained_backbone:
+        groups.append({"params": [parameter for parameter in backbone.parameters() if parameter.requires_grad],
+                       "lr": args.backbone_learning_rate})
     optimizer = Adafactor(groups, scale_parameter=False, relative_step=False, warmup_init=False,
                          beta1=None, weight_decay=0, clip_threshold=1.0)
     manifest = {
@@ -421,11 +440,14 @@ def _run_scalable_arm(args) -> int:
         "torch": torch.__version__, "transformers": transformers.__version__,
         "parameters_dtype": "float32", "compute_autocast": "bfloat16; cache disabled",
         "optimizer": "Adafactor; factored FP32 second moments; beta1=None; fixed learning rates",
-        "head_learning_rate": args.head_learning_rate, "backbone_learning_rate": args.backbone_learning_rate if full else None,
+        "head_learning_rate": args.head_learning_rate, "backbone_learning_rate": args.backbone_learning_rate if trained_backbone else None,
         "gradient_checkpointing": full, "gradient_buffers": "retained and zeroed between updates",
         "attention_backend": attention_backend,
         "gpu_allocation_cap_gib": getattr(args, "gpu_allocation_cap_gib", 44) if args.device == "cuda" else None,
-        "backbone_trainable": full, "backbone_parameter_count": parameter_bytes // 4,
+        "backbone_trainable": trained_backbone, "backbone_parameter_count": parameter_bytes // 4,
+        "backbone_training_scope": args.arm,
+        "trainable_backbone_parameter_names": trainable_backbone_names,
+        "trainable_backbone_parameter_count": sum(parameter.numel() for parameter in backbone.parameters() if parameter.requires_grad),
         "head_parameter_count": sum(parameter.numel() for parameter in head.parameters()),
         "initial_head_state_sha256": model_state_sha256(head),
         "selection_metric": "minimum development soft_cross_entropy (KL differs by constant target entropy); Brier and aligned order consistency are diagnostics",
@@ -443,7 +465,7 @@ def _run_scalable_arm(args) -> int:
         "device_name": torch.cuda.get_device_name() if args.device == "cuda" else "CPU",
     }
     atomic_json(out / "manifest.json", manifest)
-    cache = None if full else FeatureCache(json.dumps({key: manifest[key] for key in
+    cache = None if trained_backbone else FeatureCache(json.dumps({key: manifest[key] for key in
                                                       ["repo", "revision", "formatter", "pooling", "device", "torch", "transformers", "attention_backend"]}, sort_keys=True),
                                           args.feature_cache_mib * 1024**2)
     dev_lengths = ordered_lengths([source_rows[identifier] for identifier in selection["ids_by_split"]["dev"]],
@@ -494,11 +516,11 @@ def _run_scalable_arm(args) -> int:
                     "elapsed_seconds": elapsed_before_resume + time.perf_counter() - started,
                     "best_checkpoint": os.path.relpath(best_path, destination.parent), "reason": reason}
         if not destination.exists():
-            needed = checkpoint_space_bytes(backbone, head, optimizer, full) + 2 * 1024**3
+            needed = checkpoint_space_bytes(backbone, head, optimizer, trained_backbone) + 2 * 1024**3
             if shutil.disk_usage(out).free < needed:
                 raise MemoryError(f"Checkpoint needs {needed / 1024**3:.2f} GiB of free disk including its reserve")
             save_training_checkpoint(destination, backbone=backbone, tokenizer=tokenizer, head=head,
-                                     optimizer=optimizer, progress=progress, manifest=manifest, include_backbone=full)
+                                     optimizer=optimizer, progress=progress, manifest=manifest, include_backbone=trained_backbone)
             saved_paths.append(destination)
         atomic_json(out / "latest-checkpoint.json", {"path": os.path.relpath(destination, out), "reason": reason})
         atomic_json(out / "best-checkpoint.json", {"path": os.path.relpath(best_path, out), "loss": best_loss, "update": best_update})
@@ -572,10 +594,18 @@ def _run_scalable_arm(args) -> int:
                 raise RuntimeError("Non-finite categorical training loss")
             (loss * len(batch) / questions).backward()
             loss_sum += loss.item() * len(batch)
-        if full and first_update:
-            missing = [name for name, parameter in backbone.named_parameters() if parameter.grad is None]
+        if trained_backbone and first_update:
+            missing = [name for name, parameter in backbone.named_parameters() if parameter.requires_grad and parameter.grad is None]
             if missing:
-                raise RuntimeError(f"Full training did not reach all backbone parameters: {missing}")
+                raise RuntimeError(f"Training did not reach all allowed backbone parameters: {missing}")
+            unexpected = [name for name, parameter in backbone.named_parameters() if not parameter.requires_grad and parameter.grad is not None]
+            if unexpected:
+                raise RuntimeError(f"Frozen backbone parameters received gradients: {unexpected}")
+            atomic_json(out / "first-gradient-proof.json", {
+                "training_scope": args.arm, "trainable_names": trainable_backbone_names,
+                "all_trainable_backbone_gradients_present": True, "frozen_backbone_gradients_absent": True,
+                "head_gradients_present": all(parameter.grad is not None for parameter in head.parameters()),
+            })
         first_update = False
         norm = torch.nn.utils.clip_grad_norm_([parameter for group in optimizer.param_groups for parameter in group["params"]],
                                              1.0, error_if_nonfinite=True)

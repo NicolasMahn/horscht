@@ -7,10 +7,12 @@ import pytest
 import torch
 
 from scalable_training import (
-    checkpoint_space_bytes, compare_training_arms, encode_batch, excluded_by_protocol,
+    checkpoint_space_bytes, compare_training_arms, configure_backbone_training, encode_batch, excluded_by_protocol,
     model_state_sha256, run_scalable_arm, validate_system_test_lock,
     with_linked_exclusions,
 )
+from experiment import DecisionHead
+from training_checkpoint import load_training_checkpoint, save_training_checkpoint
 from training_loop import FeatureCache
 
 
@@ -92,6 +94,128 @@ def test_head_only_update_keeps_frozen_backbone_exactly_unchanged_without_cache(
     for name, value in backbone.state_dict().items():
         assert torch.equal(value, before[name])
     assert not torch.equal(head.weight, head_before)
+
+
+@pytest.fixture
+def tiny_qwen3():
+    from transformers import Qwen3Config, Qwen3Model
+
+    previous_threads = torch.get_num_threads()
+    torch.set_num_threads(1)
+    try:
+        with torch.random.fork_rng(devices=[]):
+            torch.manual_seed(19)
+            config = Qwen3Config(
+                vocab_size=32, hidden_size=16, intermediate_size=32,
+                num_hidden_layers=3, num_attention_heads=4, num_key_value_heads=2,
+                head_dim=4, max_position_embeddings=32, pad_token_id=0,
+                attention_dropout=0.0,
+            )
+            yield Qwen3Model(config).cpu()
+    finally:
+        torch.set_num_threads(previous_threads)
+
+
+@pytest.mark.parametrize("arm", ["head", "last-block", "full"])
+def test_backbone_training_scope_has_an_exact_parameter_allowlist(tiny_qwen3, arm):
+    backbone = tiny_qwen3
+    backbone.requires_grad_(False)
+    backbone.embed_tokens.weight.requires_grad_(True)
+    trainable_names = configure_backbone_training(backbone, arm)
+    actual = {name for name, parameter in backbone.named_parameters() if parameter.requires_grad}
+    expected = {
+        name for name, _ in backbone.named_parameters()
+        if arm == "full" or arm == "last-block" and name.startswith("layers.2.")
+    }
+    assert actual == expected
+    assert set(trainable_names) == expected
+
+
+def test_last_block_qwen3_update_and_full_checkpoint_preserve_the_frozen_prefix(tiny_qwen3, tmp_path):
+    from transformers import Adafactor
+
+    backbone = tiny_qwen3
+    tokenizer = BatchTokenizer()
+    rows = [row("short", 3), row("long", 5)]
+    backbone.eval()
+    with torch.no_grad():
+        ordinary_features = encode_batch(tokenizer, backbone, rows, 5, "cpu")
+    configure_backbone_training(backbone, "last-block")
+    backbone.train()
+    head = DecisionHead(backbone.config.hidden_size, capacity=2)
+    before = {name: value.clone() for name, value in backbone.state_dict().items()}
+    head_before = {name: value.clone() for name, value in head.state_dict().items()}
+    layer_graphs = {}
+
+    def capture_graph(index):
+        def hook(module, inputs, output):
+            hidden = output[0] if isinstance(output, tuple) else output
+            layer_graphs[index] = hidden.requires_grad
+        return hook
+
+    hooks = [layer.register_forward_hook(capture_graph(index))
+             for index, layer in enumerate(backbone.layers)]
+    try:
+        features = encode_batch(tokenizer, backbone, rows, 5, "cpu")
+    finally:
+        for hook in hooks:
+            hook.remove()
+    torch.testing.assert_close(features, ordinary_features, rtol=0, atol=0)
+    assert layer_graphs == {0: False, 1: False, 2: True}
+    assert features.requires_grad
+    counts, labels = torch.tensor([2, 2]), torch.tensor([0, 1])
+
+    def make_optimizer(model, decision_head):
+        return Adafactor(
+            [{"params": [parameter for parameter in model.parameters() if parameter.requires_grad], "lr": 0.001},
+             {"params": list(decision_head.parameters()), "lr": 0.01}],
+            scale_parameter=False, relative_step=False, warmup_init=False, beta1=None,
+        )
+
+    optimizer = make_optimizer(backbone, head)
+    torch.nn.functional.cross_entropy(head(features, counts), labels).backward()
+    for name, parameter in backbone.named_parameters():
+        if name.startswith("layers.2."):
+            assert parameter.grad is not None, name
+            assert torch.isfinite(parameter.grad).all(), name
+        else:
+            assert parameter.grad is None, name
+    assert all(parameter.grad is not None for parameter in head.parameters())
+    optimizer.step()
+    changed = {name for name, value in backbone.state_dict().items() if not torch.equal(value, before[name])}
+    assert changed and all(name.startswith("layers.2.") for name in changed)
+    assert all(torch.equal(value, before[name]) for name, value in backbone.state_dict().items()
+               if not name.startswith("layers.2."))
+    assert any(not torch.equal(value, head_before[name]) for name, value in head.state_dict().items())
+
+    checkpoint = save_training_checkpoint(
+        tmp_path / "last-block", backbone=backbone, head=head, optimizer=optimizer,
+        progress={"global_update": 1}, manifest={"arm": "last-block"}, include_backbone=True,
+    )
+    payload = torch.load(checkpoint / "backbone.pt", map_location="cpu", weights_only=True)
+    assert set(payload) == set(backbone.state_dict())
+    assert all(torch.equal(value, backbone.state_dict()[name]) for name, value in payload.items())
+    restored_backbone = type(backbone)(backbone.config).cpu()
+    configure_backbone_training(restored_backbone, "last-block")
+    restored_head = DecisionHead(backbone.config.hidden_size, capacity=2)
+    restored_optimizer = make_optimizer(restored_backbone, restored_head)
+    metadata = load_training_checkpoint(
+        checkpoint, backbone=restored_backbone, head=restored_head, optimizer=restored_optimizer,
+    )
+    assert metadata == {"progress": {"global_update": 1}, "manifest": {"arm": "last-block"}}
+    for model, decision_head, opt in [(backbone, head, optimizer),
+                                      (restored_backbone, restored_head, restored_optimizer)]:
+        opt.zero_grad(set_to_none=True)
+        model.train()
+        current_features = encode_batch(tokenizer, model, rows, 5, "cpu")
+        torch.nn.functional.cross_entropy(decision_head(current_features, counts), labels).backward()
+        opt.step()
+    for name, value in backbone.state_dict().items():
+        assert torch.equal(value, restored_backbone.state_dict()[name]), name
+        if not name.startswith("layers.2."):
+            assert torch.equal(value, before[name]), name
+    for name, value in head.state_dict().items():
+        assert torch.equal(value, restored_head.state_dict()[name]), name
 
 
 def test_launch_gate_rejects_before_output_or_model_allocation(tmp_path):

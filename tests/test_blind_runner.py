@@ -209,15 +209,16 @@ def test_current_corpus_protocol_reuses_bundle_and_pins_one_selected_checkpoint(
     assert items_path.is_file()
 
 
-def test_current_head_protocol_keeps_single_candidate_and_binding_contract(tmp_path, monkeypatch):
+@pytest.mark.parametrize("arm", ["head", "last-block"])
+def test_current_single_candidate_protocol_keeps_completed_report_binding_contract(tmp_path, monkeypatch, arm):
     protocol = json.loads((blind_runner.ROOT / "evaluation/protocols/current-corpus-blind-mcq-v1.json").read_text())
     monkeypatch.setattr(blind_runner, "ROOT", tmp_path)
-    protocol["protocol_id"] = "independent-mcq-current-head-2026-10-v1"
-    protocol["candidates"] = ["head"]
-    protocol["run_paths"] = {"head": "runs/current-corpus-head-only-2026-10-04/head"}
-    path = tmp_path / "head-protocol.json"
+    protocol["protocol_id"] = f"independent-mcq-current-{arm}-2026-10-v1"
+    protocol["candidates"] = [arm]
+    protocol["run_paths"] = {arm: f"runs/synthetic-{arm}/{arm}"}
+    path = tmp_path / f"{arm}-protocol.json"
     path.write_text(json.dumps(protocol))
-    assert blind_runner._load_protocol(path)[0]["candidates"] == ["head"]
+    assert blind_runner._load_protocol(path)[0]["candidates"] == [arm]
     protocol["selection_binding"].pop("report_sha256")
     path.write_text(json.dumps(protocol))
     with pytest.raises(blind_runner.BlindEvaluationError, match="protocol_selection_binding_invalid"):
@@ -319,8 +320,10 @@ def _candidate_fixture(root, arm):
         "backbone_config/config.json": b"synthetic backbone config",
         "head.pt": b"synthetic head weights",
     }
-    if arm == "full":
+    if arm in {"full", "last-block"}:
         contents["backbone.pt"] = b"synthetic backbone weights"
+    if arm == "last-block":
+        contents["backbone_config/config.json"] = json.dumps({"num_hidden_layers": 3}).encode()
     for relative, payload in contents.items():
         path = checkpoint / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -351,6 +354,15 @@ def _candidate_fixture(root, arm):
         "torch": "synthetic-torch",
         "transformers": "synthetic-transformers",
     }
+    if arm == "last-block":
+        run_manifest.update({
+            "backbone_training_scope": "last-block",
+            "backbone_trainable": True,
+            "trainable_backbone_parameter_names": [
+                "layers.2.self_attn.q_proj.weight", "layers.2.post_attention_layernorm.weight",
+            ],
+            "trainable_backbone_parameter_count": 32,
+        })
     run.mkdir(parents=True, exist_ok=True)
     run_manifest_path = run / "manifest.json"
     run_manifest_path.write_text(json.dumps(run_manifest), encoding="utf-8")
@@ -363,7 +375,7 @@ def _candidate_fixture(root, arm):
     }), encoding="utf-8")
     checkpoint_manifest = {
         "schema_version": 1,
-        "include_backbone": arm == "full",
+        "include_backbone": arm in {"full", "last-block"},
         "manifest": dict(run_manifest),
         "files": files,
     }
@@ -436,7 +448,7 @@ def test_selected_candidate_and_reflection_receipt_bind_checkpoint_payload_hashe
     assert "Synthetic question contents" not in str(raised.value)
 
 
-@pytest.mark.parametrize("arm", ["full", "head"])
+@pytest.mark.parametrize("arm", ["full", "head", "last-block"])
 def test_single_candidate_selection_binding_allows_only_pinned_recovery_target(monkeypatch, tmp_path, arm):
     monkeypatch.setattr(blind_runner, "ROOT", tmp_path)
     source_run = _candidate_fixture(tmp_path, arm)
@@ -491,3 +503,139 @@ def test_single_candidate_selection_binding_allows_only_pinned_recovery_target(m
     with pytest.raises(blind_runner.BlindEvaluationError) as raised:
         blind_runner._verify_selection_binding(tampered, {arm: candidate}, tmp_path / "unused-receipt.json")
     assert raised.value.safe_code == "candidate_development_selection_binding_mismatch"
+
+
+@pytest.fixture
+def last_block_candidate(tmp_path, monkeypatch):
+    monkeypatch.setattr(blind_runner, "ROOT", tmp_path)
+    run = _candidate_fixture(tmp_path, "last-block")
+    protocol = {
+        "model_key": "qwen-instruct",
+        "model_id": "Qwen/Qwen3-4B",
+        "model_revision": "1cfa9a7208912126459214e8b04321603b3df60c",
+        "run_paths": {"last-block": "runs/last-block"},
+        "prompt_format": {"id": "plain-context-question-choices-v1"},
+        "inference": {
+            "pooling": "last non-padding token",
+            "choice_head_capacity": 265,
+            "input_limit_tokens": 10240,
+            "attention_backend": "flash",
+            "parameters_dtype": "float32",
+            "backbone_autocast": "bfloat16; cache disabled",
+        },
+    }
+    return run, protocol
+
+
+@pytest.mark.parametrize("missing", ["state-policy", "backbone-payload", "both"])
+def test_last_block_selected_checkpoint_requires_the_full_backbone(last_block_candidate, missing):
+    run, protocol = last_block_candidate
+    checkpoint = run / "checkpoints/best"
+    path = checkpoint / "checkpoint.json"
+    metadata = json.loads(path.read_text())
+    if missing in {"state-policy", "both"}:
+        metadata["include_backbone"] = False
+    if missing in {"backbone-payload", "both"}:
+        del metadata["files"]["backbone.pt"]
+        (checkpoint / "backbone.pt").unlink()
+    path.write_text(json.dumps(metadata))
+    with pytest.raises(blind_runner.BlindEvaluationError) as raised:
+        blind_runner._selected_candidate("last-block", run, protocol)
+    assert raised.value.safe_code == "candidate_checkpoint_protocol_mismatch"
+
+
+@pytest.mark.parametrize("field,value", [
+    ("status", "interrupted"), ("selected_checkpoint_reload_verified", False),
+])
+def test_last_block_candidate_requires_a_completed_verified_report(last_block_candidate, field, value):
+    run, protocol = last_block_candidate
+    path = run / "report.json"
+    report = json.loads(path.read_text())
+    report[field] = value
+    path.write_text(json.dumps(report))
+    with pytest.raises(blind_runner.BlindEvaluationError) as raised:
+        blind_runner._selected_candidate("last-block", run, protocol)
+    assert raised.value.safe_code == "candidate_run_protocol_mismatch"
+
+
+@pytest.mark.parametrize("field,value", [
+    ("backbone_training_scope", None),
+    ("backbone_training_scope", "full"),
+    ("backbone_trainable", False),
+    ("trainable_backbone_parameter_names", None),
+    ("trainable_backbone_parameter_names", []),
+    ("trainable_backbone_parameter_names", [17]),
+    ("trainable_backbone_parameter_names", ["layers.2.self_attn.q_proj.weight"] * 2),
+    ("trainable_backbone_parameter_names", ["layers.1.self_attn.q_proj.weight"]),
+    ("trainable_backbone_parameter_names", ["layers.2.self_attn.q_proj.weight", "embed_tokens.weight"]),
+    ("trainable_backbone_parameter_names", ["norm.weight"]),
+    ("trainable_backbone_parameter_count", 0),
+    ("trainable_backbone_parameter_count", True),
+])
+def test_last_block_candidate_rejects_unsafe_training_declarations(last_block_candidate, field, value):
+    run, protocol = last_block_candidate
+    manifest_path = run / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    if value is None:
+        del manifest[field]
+    else:
+        manifest[field] = value
+    manifest_path.write_text(json.dumps(manifest))
+    checkpoint_path = run / "checkpoints/best/checkpoint.json"
+    checkpoint = json.loads(checkpoint_path.read_text())
+    checkpoint["manifest"] = manifest
+    checkpoint_path.write_text(json.dumps(checkpoint))
+    with pytest.raises(blind_runner.BlindEvaluationError) as raised:
+        blind_runner._selected_candidate("last-block", run, protocol)
+    assert raised.value.safe_code == "candidate_last_block_scope_invalid"
+
+
+@pytest.mark.parametrize("field,value", [
+    ("backbone_training_scope", "full"),
+    ("trainable_backbone_parameter_names", ["layers.2.mlp.up_proj.weight"]),
+    ("trainable_backbone_parameter_count", 64),
+])
+def test_last_block_checkpoint_training_declaration_matches_its_source_run(last_block_candidate, field, value):
+    run, protocol = last_block_candidate
+    path = run / "checkpoints/best/checkpoint.json"
+    checkpoint = json.loads(path.read_text())
+    checkpoint["manifest"][field] = value
+    path.write_text(json.dumps(checkpoint))
+    with pytest.raises(blind_runner.BlindEvaluationError) as raised:
+        blind_runner._selected_candidate("last-block", run, protocol)
+    assert raised.value.safe_code == "candidate_checkpoint_run_manifest_mismatch"
+
+
+def test_last_block_recovery_manifest_scope_matches_the_checkpoint_source(last_block_candidate):
+    source_run, protocol = last_block_candidate
+    root = source_run.parent.parent
+    recovery_run = root / "runs/recovery/last-block"
+    recovery_run.mkdir(parents=True)
+    manifest = json.loads((source_run / "manifest.json").read_text())
+    manifest["backbone_training_scope"] = "full"
+    manifest_path = recovery_run / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest))
+    report = json.loads((source_run / "report.json").read_text())
+    relative = "../../last-block/checkpoints/best"
+    report["best_checkpoint_relative"] = relative
+    report_path = recovery_run / "report.json"
+    report_path.write_text(json.dumps(report))
+    protocol.update({
+        "training_snapshot_manifest_sha256": "1" * 64,
+        "system_test_lock_sha256": "3" * 64,
+        "run_paths": {"last-block": "runs/recovery/last-block"},
+        "selection_binding": {
+            "kind": "completed-development-report",
+            "report_path": "runs/recovery/last-block/report.json",
+            "report_sha256": _sha256(report_path),
+            "best_checkpoint_relative": relative,
+            "selected_checkpoint_path": "runs/last-block/checkpoints/best",
+            "checkpoint_manifest_sha256": _sha256(source_run / "checkpoints/best/checkpoint.json"),
+            "run_manifest_sha256": _sha256(manifest_path),
+            "checkpoint_source_run_manifest_path": "runs/last-block/manifest.json",
+            "checkpoint_source_run_manifest_sha256": _sha256(source_run / "manifest.json"),
+        },
+    })
+    with pytest.raises(blind_runner.BlindEvaluationError) as raised:
+        blind_runner._selected_candidate("last-block", recovery_run, protocol)
+    assert raised.value.safe_code == "candidate_checkpoint_run_manifest_mismatch"

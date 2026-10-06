@@ -19,6 +19,7 @@ from report_theme import PALETTE
 ROOT = Path(__file__).resolve().parent
 OUTPUT = ROOT / "runs/project-record-2026-10-04.html"
 HEAD_RUN = "runs/current-corpus-head-only-2026-10-04"
+LAST_BLOCK_RUN = "runs/current-corpus-last-block-2026-10-05"
 BENCHMARK_ROOT = "data/external_evaluation/results"
 BENCHMARKS = {
     "original": f"{BENCHMARK_ROOT}/original-qwen-label-likelihood-2026-10-04/blind-aggregate-result.json",
@@ -26,7 +27,7 @@ BENCHMARKS = {
     "current": f"{BENCHMARK_ROOT}/current-corpus-benchmark-2026-10-04-final/blind-aggregate-result.json",
 }
 PRESENTATION = {
-    "original": "purple", "previous": "teal", "current": "blue",
+    "matched": "blue", "reference": "orange",
     "development": "blue", "training": "teal", "selected": "good",
     "recovery": "orange", "completed": "good", "proposed": "orange",
     "hypothesis": "purple",
@@ -76,7 +77,7 @@ def current_head_state():
     latest_dev = progress.get('latest_development')
     if latest_dev and not updates:
         body += f'<p>Initial development baseline: {latest_dev["questions_done"]:,} / {latest_dev["questions"]:,} questions in the current pass. No optimizer update has occurred yet.</p>'
-    if 'measured_update_seconds' in progress:
+    if unit == 'active' and 'measured_update_seconds' in progress:
         body += f'<p>Measured recent throughput: {progress["measured_questions_per_second"]:.2f} questions/second; {progress["measured_update_seconds"]:.2f} seconds/update. Estimated training completion {escape(progress["estimated_training_completion_at"])}; includes repeated development scoring and checkpoint verification, and can change with input lengths.</p>'
     report_path = f'{HEAD_RUN}/head/report.json'
     if (ROOT / report_path).exists():
@@ -98,6 +99,112 @@ def current_head_state():
         body += f'<p>Exploratory external suite: {metrics["accuracy"]:.2%} accuracy ({metrics["correct"]:,} / {metrics["examples"]:,}), NLL {metrics["negative_log_likelihood"]:.4f}, Brier {metrics["multiclass_brier_score"]:.4f}. Accuracy change versus matched current FULL: {benchmark["accuracy_delta_percentage_points"]:+.2f} percentage points. Each checkpoint was frozen using development before external scoring.</p>'
     body += f'<p>{link(status_path, "Latest saved progress")} · {link(f"{HEAD_RUN}/declaration.json", "Matched experiment declaration")} · {link(f"{HEAD_RUN}/completion-status.json", "Completion and evaluation status")}</p>'
     gpu = 'GPU owned by frozen-backbone comparison' if unit == 'active' else 'Training GPU job ended; completion status records external evaluation.'
+    return state, meaning, gpu, body
+
+
+def current_last_block_state():
+    if not (ROOT / LAST_BLOCK_RUN / 'process.json').exists():
+        return 'Not started', 'Fresh head and final transformer block.', '', ''
+    process = read(f'{LAST_BLOCK_RUN}/process.json')
+    declaration = read(f'{LAST_BLOCK_RUN}/declaration.json')
+    status_path = f'{LAST_BLOCK_RUN}/progress.json'
+    if not (ROOT / status_path).exists():
+        status_path = f'{LAST_BLOCK_RUN}/training-status.json'
+    progress = read(status_path) if (ROOT / status_path).exists() else {}
+    unit = subprocess.run(['systemctl', '--user', 'is-active', process['service']], capture_output=True, text=True).stdout.strip()
+    state = 'Running · ' + progress.get('phase', 'starting') if unit == 'active' else 'Stopped · verify saved status'
+    if unit == 'active' and progress.get('global_update') == 8017:
+        state = 'Training exposure completed · checkpoint verification running'
+    meaning = f'{progress.get("global_update", 0):,} / 8,017 updates; matched frozen corpus, fresh head and original Qwen.'
+    body = f'<p>Last-block arm launched {escape(process["start_time"])}. {escape(declaration["training_scope"])} Same immutable selection, seed, fresh head initialization, choice permutations and one-epoch budget as current FULL and current head-only: 128,263 questions and 37,756,818 tokens. Adafactor uses head learning rate 0.001 and last-block rate 0.00001.</p>'
+    durability_path = f'{LAST_BLOCK_RUN}/durability-proof.json'
+    if (ROOT / durability_path).exists():
+        durability = read(durability_path)
+        if durability['linger_after'] is not True:
+            raise ValueError('Last-block user-service persistence is unverified')
+        body += f'<p>User-service persistence across logout was enabled and verified {escape(durability["verified_at"])}. {link(durability_path, "Service durability receipt")}</p>'
+    manifest_path = f'{LAST_BLOCK_RUN}/last-block/manifest.json'
+    if (ROOT / manifest_path).exists():
+        manifest = read(manifest_path)
+        body += f'<p>Trainable backbone parameters: {manifest["trainable_backbone_parameter_count"]:,}; head: {manifest["head_parameter_count"]:,}. Frozen prefix builds no gradient graph; the frozen final normalization propagates gradients into the final block. Initial head SHA-256 matches the earlier arms. Complete full-format checkpoints preserve optimizer, cursor and RNG state.</p>'
+    initial_path = f'{LAST_BLOCK_RUN}/initial-comparison-proof.json'
+    if (ROOT / initial_path).exists():
+        initial = read(initial_path)
+        if not initial['same_initial_head'] or not initial['runtime_baseline_match']:
+            raise ValueError('Last-block initialization is not matched')
+        body += f'<p>The initial 7,202-question runtime baseline matches both reference arms exactly. {link(initial_path, "Initialization comparison proof")}</p>'
+    gradient_path = f'{LAST_BLOCK_RUN}/last-block/first-gradient-proof.json'
+    if (ROOT / gradient_path).exists():
+        gradient = read(gradient_path)
+        if not all(gradient[key] for key in ('all_trainable_backbone_gradients_present', 'frozen_backbone_gradients_absent', 'head_gradients_present')):
+            raise ValueError('Last-block gradient proof failed')
+        body += f'<p>The first optimizer update reached the allowed final-block and head parameters; frozen backbone parameters received no gradients. {link(gradient_path, "First-gradient proof")}</p>'
+    early_frozen_path = f'{LAST_BLOCK_RUN}/early-frozen-weights-proof.json'
+    if (ROOT / early_frozen_path).exists():
+        frozen = read(early_frozen_path)
+        if frozen['all_frozen_weights_bitwise_equal_to_original'] is not True:
+            raise ValueError('Last-block early frozen-weight proof failed')
+        body += f'<p>At saved update {frozen["checkpoint_update"]:,}, all {frozen["frozen_parameters_checked"]:,} frozen parameters remained byte-identical to the pinned original; {frozen["changed_trainable_tensors"]} final-block tensors changed. {link(early_frozen_path, "Learned-checkpoint frozen-weight verification")}</p>'
+    exposure_path = f'{LAST_BLOCK_RUN}/first-learned-updates-proof.json'
+    if (ROOT / exposure_path).exists():
+        exposure = read(exposure_path)
+        if not exposure['matched_update_exposure'] or not exposure['matched_epoch_plan']:
+            raise ValueError('Last-block first-update exposure differs')
+        body += f'<p>{link(exposure_path, "First 20 updates: matched exposure, measured speed and memory")}</p>'
+    if unit == 'active' and 'measured_update_seconds' in progress:
+        body += f'<p>Measured recent throughput: {progress["measured_questions_per_second"]:.2f} questions/second; {progress["measured_update_seconds"]:.2f} seconds/update. Estimated training completion {escape(progress["estimated_training_completion_at"])}; repeated development evaluations and selected-checkpoint verification are included.</p>'
+    best_path = f'{LAST_BLOCK_RUN}/last-block/best-checkpoint.json'
+    if (ROOT / best_path).exists():
+        best = read(best_path)
+        body += f'<p>Saved development minimum: cross-entropy {best["loss"]:.5f} at update {best["update"]:,}. {link(best_path, "Development checkpoint selection")}</p>'
+    early_dev_path = f'{LAST_BLOCK_RUN}/development-update-00000512-comparison.json'
+    if (ROOT / early_dev_path).exists():
+        early_dev = read(early_dev_path)
+        early_metrics = early_dev['metrics']
+        body += f'<p>At matched update 512, development cross-entropy was {early_metrics["last-block"]["soft_cross_entropy"]:.5f} for last-block, {early_metrics["head-only"]["soft_cross_entropy"]:.5f} for head-only and {early_metrics["FULL"]["soft_cross_entropy"]:.5f} for FULL. These are early development results; the one-epoch schedule remains unchanged. {link(early_dev_path, "Matched-update development comparison")}</p>'
+    report_path = f'{LAST_BLOCK_RUN}/last-block/report.json'
+    if (ROOT / report_path).exists():
+        report = read(report_path)
+        if report['status'] == 'completed' and report['selected_checkpoint_reload_verified']:
+            state = 'Training completed'
+            meaning = f'8,017 updates; development selected update {report["best_update"]:,}.'
+            body += f'<p>Selected development cross-entropy {report["best_dev_soft_cross_entropy"]:.5f}; reload verified. {link(f"{LAST_BLOCK_RUN}/comparison.json", "Matched exposure and selection comparison")}</p>'
+    external_running = False
+    external_status_path = f'{BENCHMARK_ROOT}/current-corpus-last-block-2026-10-05/run-status.json'
+    if (ROOT / external_status_path).exists():
+        external_status = read(external_status_path)
+        external_running = external_status['phase'] == 'candidate_running'
+        if external_running:
+            state = 'Training completed · external evaluation running'
+            body += f'<p>Serial external evaluation has processed {external_status["processed_items"]:,} / {external_status["total_items"]:,} items as of {escape(external_status["updated_at_utc"])}. {link(external_status_path, "Safe aggregate evaluation progress")}</p>'
+    benchmark_path = f'{LAST_BLOCK_RUN}/benchmark-report.json'
+    if (ROOT / benchmark_path).exists():
+        benchmark = read(benchmark_path)
+        aggregate_path = f'{BENCHMARK_ROOT}/current-corpus-last-block-2026-10-05/blind-aggregate-result.json'
+        aggregate = read(aggregate_path)
+        if SOURCES[aggregate_path] != benchmark['aggregate_sha256'] or aggregate['candidate_results']['last-block'] != benchmark['metrics']:
+            raise ValueError('Last-block aggregate differs from its report binding')
+        frozen = read(f'{LAST_BLOCK_RUN}/selected-frozen-weights-proof.json')
+        if frozen['all_frozen_weights_bitwise_equal_to_original'] is not True:
+            raise ValueError('Last-block frozen-weight proof failed')
+        validate_metrics(benchmark['metrics'])
+        state = 'Training and external evaluation completed'
+        rows = []
+        for label, metrics in [('Current head-only', benchmark['comparison_head_only']), ('Current last-block', benchmark['metrics']), ('Current FULL', benchmark['comparison_current_full'])]:
+            validate_metrics(metrics)
+            metric = metrics['overall']
+            mmlu = metrics['by_source_slice']['mmlu-pro-test']
+            rows.append((label, f'{metric["correct"]:,} / {metric["examples"]:,}', f'{metric["accuracy"]:.2%}', f'{mmlu["accuracy"]:.2%}', f'{metric["negative_log_likelihood"]:.4f}', f'{metric["multiclass_brier_score"]:.4f}'))
+        body += table(['Matched arm', 'Correct / items', 'Accuracy', 'MMLU-Pro', 'NLL', 'Brier'], rows, 'Same observed 17,874-item suite; exploratory reuse; development-selected checkpoints')
+        body += f'<p>External evaluation completed {escape(benchmark["evaluated_at_utc"])}. All frozen backbone weights were checked against the original pinned weights before scoring. {link(f"{LAST_BLOCK_RUN}/selected-frozen-weights-proof.json", "Frozen-weight verification")}</p>'
+        verification_path = f'{LAST_BLOCK_RUN}/final-verification.json'
+        if (ROOT / verification_path).exists():
+            verification = read(verification_path)
+            if verification['aggregate_sha256'] != benchmark['aggregate_sha256'] or not verification['selection_hash_bindings_verified'] or not verification['aggregate_totals_verified']:
+                raise ValueError('Last-block final verification differs')
+            body += f'<p>Final aggregate, selected-checkpoint bindings, matched reference metrics and successful service exits verified {escape(verification["verified_at"])}. {link(verification_path, "Final completion verification")}</p>'
+    body += f'<p>{link(status_path, "Last-block saved progress")} · {link(f"{LAST_BLOCK_RUN}/declaration.json", "Last-block experiment declaration")} · {link(f"{LAST_BLOCK_RUN}/completion-status.json", "Last-block completion and evaluation status")}</p>'
+    gpu = 'GPU owned by last-block external evaluation' if external_running else 'GPU owned by last-block comparison' if unit == 'active' else 'Last-block training GPU job ended; completion receipt records evaluation.'
     return state, meaning, gpu, body
 
 
@@ -147,17 +254,59 @@ def corpus_counts():
     return splits, languages, kinds, choices, non_one_hot, review
 
 
-def benchmark_chart(systems):
-    parts = ['<svg viewBox="0 0 900 230" role="img" aria-label="External suite accuracy: original Qwen 51.72 percent, earlier full tune 45.57 percent, current full tune 40.19 percent. These are different systems, not a trajectory within one run.">']
-    for i, (role, label, metrics) in enumerate(systems):
-        y = 22 + 66 * i
-        parts.append(f'<text x="0" y="{y+23}">{escape(label)}</text><rect class="bar {role}" x="260" y="{y}" width="{metrics["accuracy"]*950:.2f}" height="36" rx="5"/><text x="{274+metrics["accuracy"]*950:.2f}" y="{y+24}">{metrics["accuracy"]:.2%}</text>')
-    parts.append('<text x="260" y="225">Same 17,874 items · different training snapshots/readouts</text></svg>')
+def matched_arms():
+    """External metrics for the three arms trained on the same frozen corpus, once all are scored."""
+    path = f'{LAST_BLOCK_RUN}/benchmark-report.json'
+    if not (ROOT / path).exists():
+        return {}
+    report = read(path)
+    arms = {'head-only': report['comparison_head_only'], 'last-block': report['metrics'],
+            'full': report['comparison_current_full']}
+    for metrics in arms.values():
+        validate_metrics(metrics)
+    return arms
+
+
+def bar(x, y, width, height, radius=4):
+    """Bar rounded at the data end and square at the baseline."""
+    radius = min(radius, width)
+    return (f'M{x:.2f},{y:.2f}h{width-radius:.2f}a{radius},{radius} 0 0 1 {radius},{radius}'
+            f'v{height-2*radius:.2f}a{radius},{radius} 0 0 1 -{radius},{radius}h-{width-radius:.2f}z')
+
+
+def benchmark_chart(groups):
+    """Horizontal accuracy bars, one band per group of (role, label, metrics) rows."""
+    left, right, plot_right, row, thickness = 300, 900, 840, 34, 22
+    rows = [entry for _, entries in groups for entry in entries]
+    top = max(math.ceil(max(m['accuracy'] for _, _, m in rows) * 10) / 10, .1)
+    x = lambda value: left + value / top * (plot_right - left)
+    summary = '; '.join(f'{label} {m["accuracy"]:.2%}' for _, label, m in rows)
+    height = 40 + row * len(rows) + 30 * len(groups)
+    parts = [f'<svg viewBox="0 0 {right} {height}" role="img" aria-label="External suite accuracy. {escape(summary, quote=True)}">']
+    for step in range(int(round(top * 10)) + 1):
+        value = step / 10
+        parts.append(f'<line class="grid" x1="{x(value):.2f}" x2="{x(value):.2f}" y1="8" y2="{height-28}"/>'
+                     f'<text class="tick" x="{x(value):.2f}" y="{height-8}" text-anchor="middle">{value:.0%}</text>')
+    y = 8
+    for title, entries in groups:
+        y += 26
+        parts.append(f'<text class="group" x="0" y="{y-6}">{escape(title)}</text>')
+        for role, label, metrics in entries:
+            width = x(metrics['accuracy']) - left
+            tip = (f'{label}: {metrics["accuracy"]:.2%} ({metrics["correct"]:,} / {metrics["examples"]:,}); '
+                   f'NLL {metrics["negative_log_likelihood"]:.4f}; Brier {metrics["multiclass_brier_score"]:.4f}')
+            parts.append(f'<g class="row"><title>{escape(tip)}</title><rect class="hit" x="0" y="{y}" width="{right}" height="{row}"/>'
+                         f'<text class="label" x="0" y="{y+row/2+5}">{escape(label)}</text>'
+                         f'<path class="bar {role}" d="{bar(left, y + (row-thickness)/2, width, thickness)}"/>'
+                         f'<text class="value" x="{left+width+8:.2f}" y="{y+row/2+5}">{metrics["accuracy"]:.2%}</text></g>')
+            y += row
+    parts.append('</svg>')
     return ''.join(parts)
 
 
 def build():
     head_state, head_meaning, head_gpu, head_body = current_head_state()
+    last_state, last_meaning, last_gpu, last_body = current_last_block_state()
     observed = datetime.now(timezone.utc).isoformat(timespec='seconds')
     history, training, status, config, resume = load_training()
     for path in ('run-config.json', 'recovery-2026-10-04/full/report.json',
@@ -191,21 +340,33 @@ def build():
     doc_pilot = read('data/document_pilot/2026-10-02/summary.json')
     dev_points = [point for point in history if 'dev' in point]
     baseline, selected, final = dev_points[0]['dev'], training['selected_checkpoint_development'], dev_points[-1]['dev']
-    systems = [('original', 'Original Qwen · native LM head', original['overall']),
-               ('previous', 'Earlier full tune', earlier['overall']),
-               ('current', 'Current full tune · update 4,608', current['overall'])]
-    benchmark_rows = [(label, f'{metrics["correct"]:,} / {metrics["examples"]:,}',
-                       f'{metrics["accuracy"]:.2%}', f'{metrics["negative_log_likelihood"]:.4f}',
-                       f'{metrics["multiclass_brier_score"]:.4f}') for _, label, metrics in systems]
-    benchmark_rows.append(('Earlier frozen-backbone head', f'{frozen["overall"]["correct"]:,} / 17,874',
-                           f'{frozen["overall"]["accuracy"]:.2%}', f'{frozen["overall"]["negative_log_likelihood"]:.4f}',
-                           f'{frozen["overall"]["multiclass_brier_score"]:.4f}'))
+    arms = matched_arms()
+    if arms and arms['full'] != current:
+        raise ValueError('Matched FULL metrics differ from the current FULL aggregate')
+    matched = [('Head only · backbone frozen', arms['head-only']), ('Last block + head', arms['last-block']),
+               ('Full backbone + head', current)] if arms else [('Full backbone + head', current)]
+    references = [('Original Qwen · native LM head', original), ('Earlier full tune', earlier),
+                  ('Earlier frozen head', frozen)]
+    groups = [('Same current corpus · trainable scope grows downward', [('matched', l, m['overall']) for l, m in matched]),
+              ('Reference systems · different data or readout', [('reference', l, m['overall']) for l, m in references])]
+    benchmark_rows = [(label, f'{m["overall"]["correct"]:,} / {m["overall"]["examples"]:,}',
+                       f'{m["overall"]["accuracy"]:.2%}', f'{m["overall"]["negative_log_likelihood"]:.4f}',
+                       f'{m["overall"]["multiclass_brier_score"]:.4f}') for label, m in matched + references]
+    slice_systems = [m for _, m in matched] + [original, earlier]
     slices = []
     for key, metrics in current['by_source_slice'].items():
         label = key.replace('mmlu-pro-test', 'MMLU-Pro').replace('belebele-', 'Belebele · ').replace('bbh-', 'BBH · ').replace('-', ' ')
         slices.append((escape(label), f'{metrics["examples"]:,}',
-                       f'{original["by_source_slice"][key]["accuracy"]:.2%}',
-                       f'{earlier["by_source_slice"][key]["accuracy"]:.2%}', f'{metrics["accuracy"]:.2%}'))
+                       *[f'{m["by_source_slice"][key]["accuracy"]:.2%}' for m in slice_systems]))
+    best_arm = max(matched, key=lambda item: item[1]['overall']['accuracy'])
+    if arms:
+        lead = (f'On the same training corpus, training less of the backbone scored higher on the reused external suite: '
+                f'head only {arms["head-only"]["overall"]["accuracy"]:.2%}, last block {arms["last-block"]["overall"]["accuracy"]:.2%}, '
+                f'full backbone {current["overall"]["accuracy"]:.2%}. Original Qwen still leads at {original["overall"]["accuracy"]:.2%}, '
+                f'with a different prompt and readout. The suite is reused, so this is exploratory evidence.')
+    else:
+        lead = (f'The current full tune scored {current["overall"]["accuracy"]:.2%} on the reused external suite, below original Qwen '
+                f'({original["overall"]["accuracy"]:.2%}) and the earlier full tune ({earlier["overall"]["accuracy"]:.2%}).')
     diagnostics = ''
     for key, title in [('choice_count_bin', 'Original Qwen by number of choices'), ('input_token_bin', 'Original Qwen by input length')]:
         rows = original['exploratory_diagnostics'][key]
@@ -232,26 +393,15 @@ def build():
         choice_rows.append((label, f'{count:,}', f'{count/splits["train"]:.2%}'))
     overview = f'''
 <header><p class="muted">Horscht · project record · 2026-10-04</p><h1>What we built, what we measured, and what is still open.</h1>
-<p class="lead">The current full tune learned the internal corpus well. It trails original Qwen and the earlier full tune on the reused external suite. The completed attribution diagnostic shows substantial representation changes, but does not prove that knowledge was erased.</p>
+<p class="lead">{escape(lead)}</p>
 <p class="muted">Snapshot generated {observed}. This is a saved record, not a live activity dashboard. Discussion summaries consolidate the saved project evidence and the coordinating conversation; they are not a verbatim transcript.</p></header>
-<nav aria-label="Record contents"><a href="#results">Results</a><a href="#diagnostic">Attribution</a><a href="#corpus">Training data</a><a href="#discussion">Discussion and decisions</a><a href="#history">Earlier work</a><a href="#sources">Sources</a></nav>
-<section class="surface"><p><strong>Current state</strong></p>
-{table(['Work', 'State at this record', 'Meaning'], [
-('Current full-backbone training', '<span class="completed">Completed</span>', 'One epoch; 8,017 updates. Selected checkpoint: 4,608.'),
-('External evaluation and original comparison', '<span class="completed">Completed</span>', '17,874 reused items; aggregate-only reporting.'),
-('Synthetic attribution diagnostic', '<span class="completed">Completed</span>', 'Eight probes, four systems; about 97 seconds.'),
-('New full-dataset frozen-backbone experiment', escape(head_state), escape(head_meaning)),
-('Choice-count and length comparison', 'Partial · not running', 'Original-model strata available; matched trained-model diagnostics pending.'),
-('New game and document batches', 'Generated · not trained', 'Separate future-data artifacts; absent from the completed frozen run.'),
-('GPU / background owners', escape(head_gpu), 'Durable training and completion jobs publish saved status.')], 'Work and status')}
-<p>The earlier frozen-head control already exists. It used an earlier dataset and is <strong>not</strong> the newly discussed head-only experiment on the full current corpus.</p>
-{head_body}</section>
-<section class="surface" id="results"><p><strong>External results</strong></p>{benchmark_chart(systems)}
+<nav aria-label="Record contents"><a href="#status">Status</a><a href="#diagnostic">Attribution</a><a href="#corpus">Training data</a><a href="#discussion">Discussion and decisions</a><a href="#history">Earlier work</a><a href="#sources">Sources</a></nav>
+<section class="surface" id="results"><p><strong>External suite accuracy · 17,874 items</strong></p>{benchmark_chart(groups)}
 {table(['System', 'Correct / items', 'Accuracy ↑', 'NLL ↓', 'Brier ↓'], benchmark_rows, 'Same reused external suite')}
-<p>Original Qwen exceeds current FULL by {100*(original['overall']['accuracy']-current['overall']['accuracy']):.2f} percentage points. Earlier FULL exceeds current FULL by {100*(earlier['overall']['accuracy']-current['overall']['accuracy']):.2f} points. These compare different training runs and readouts; they do not show monotonic benchmark decline across checkpoints of one run.</p>
+<p>Best matched arm: {escape(best_arm[0].lower())}. Each matched checkpoint was frozen by internal development before external scoring. Original Qwen exceeds current FULL by {100*(original['overall']['accuracy']-current['overall']['accuracy']):.2f} percentage points. Earlier FULL exceeds current FULL by {100*(earlier['overall']['accuracy']-current['overall']['accuracy']):.2f} points. These compare different training runs and readouts; they do not show monotonic benchmark decline across checkpoints of one run.</p>
 <p>Original Qwen chooses more correct answers but has worse probability losses. Its native language-model label probabilities are often extremely confident. The current decision-head distribution has lower NLL and Brier here. Neither accuracy alone nor these scores establish calibrated confidence.</p>
-<p class="muted">All three comparisons are now exploratory evidence from an observed suite. MMLU-Pro contributes 11,874 of 17,874 items; five Belebele languages contribute 4,500, and six BBH slices contribute 1,500. The mixed average is weighted by item count. Belebele translations are related semantic problems.</p>
-{detail('Slice results, prompt differences, and evaluation boundary', table(['Slice','Items','Original Qwen','Earlier FULL','Current FULL'], slices, 'Aggregate accuracy by source slice') + '''
+<p class="muted">All of these comparisons are exploratory evidence from an observed suite. MMLU-Pro contributes 11,874 of 17,874 items; five Belebele languages contribute 4,500, and six BBH slices contribute 1,500. The mixed average is weighted by item count. Belebele translations are related semantic problems.</p>
+{detail('Slice results, prompt differences, and evaluation boundary', table(['Slice','Items',*[label for label, _ in matched],'Original Qwen','Earlier FULL'], slices, 'Aggregate accuracy by source slice') + '''
 <p>MMLU-Pro moved from 37.52% in earlier FULL to 28.37% in current FULL; original Qwen scored 39.95%. All five Belebele language slices improved from earlier FULL to current FULL. BBH changes were mixed. A single weighted score hides these differences.</p>
 <p>The two trained decision systems use the same external inference protocol but different training snapshots and checkpoints. Original Qwen uses native no-thinking chat, uppercase choice labels and restricted original LM-head label likelihood. The decision systems use plain numeric prompts and their learned decision heads. This is an end-to-end comparison; prompt, labels and readout confound any explanation in terms of backbone forgetting. It is not a generated chain-of-thought comparison.</p>
 <p>The selected current checkpoint was fixed from development before evaluation. Exact grouping, deduplication and overlap checks do not establish freedom from semantic overlap or pretrained contamination. The suite has been reused and discussed, so further adaptive work must not call it an untouched new test. Benchmark items, answers and per-item errors are absent from this report.</p>''' + f'<p>Evaluation times: earlier paired {escape(aggregates["paired"]["evaluated_at_utc"])}; current {escape(aggregates["current"]["evaluated_at_utc"])}; original {escape(original["evaluated_at_utc"])}.</p>')}
@@ -259,6 +409,18 @@ def build():
 <p>These strata exist only for the original-model method. Comparable trained-model strata have not been run. Choice cardinality, source family, difficulty and prompt length vary together; the tables do not identify a causal choice-count or length penalty. The longest stratum contains only 14 items. Comparing a long original chat prompt with a shorter decision prompt also requires a declared length definition.</p>
 <p>Proposed follow-up: compute the same fixed cardinality/length strata for each system and inspect within source family. Treat this as exploratory descriptive analysis, keep content hidden, and do not use it to select a prompt or checkpoint on the external test.</p>''')}
 </section>
+<section class="surface" id="status"><p><strong>Current state</strong></p>
+{table(['Work', 'State at this record', 'Meaning'], [
+('Current full-backbone training', '<span class="completed">Completed</span>', 'One epoch; 8,017 updates. Selected checkpoint: 4,608.'),
+('External evaluation and original comparison', '<span class="completed">Completed</span>', '17,874 reused items; aggregate-only reporting.'),
+('Synthetic attribution diagnostic', '<span class="completed">Completed</span>', 'Eight probes, four systems; about 97 seconds.'),
+('New full-dataset frozen-backbone experiment', escape(head_state), escape(head_meaning)),
+('Matched last-block experiment', escape(last_state), escape(last_meaning)),
+('Choice-count and length comparison', 'Partial · not running', 'Original-model strata available; matched trained-model diagnostics pending.'),
+('New game and document batches', 'Generated · not trained', 'Separate future-data artifacts; absent from the completed frozen run.'),
+('GPU / background owners', escape(last_gpu or head_gpu), 'Durable training and completion jobs publish saved status.')], 'Work and status')}
+<p>The earlier frozen-head control already exists. It used an earlier dataset and is <strong>not</strong> the newly discussed head-only experiment on the full current corpus.</p>
+{detail('Frozen-backbone run: evidence and receipts', head_body)}{detail('Last-block run: evidence and receipts', last_body)}</section>
 <section class="surface"><p><strong>What the current training run actually completed</strong></p>
 <p>Original pinned Qwen3-4B plus a fresh random decision head; all backbone weights were trainable. It consumed 128,263 training questions and 37,756,818 input tokens in one epoch. The original four-epoch plan was interrupted by user-manager shutdown. Verified recovery resumed optimizer and RNG state from update 7,865 in a separate output directory and was capped at one epoch for assessment.</p>
 {table(['Development metric','Initial · 0','Selected · 4,608','Final · 8,017'], internal_rows, 'Internal development: selection evidence, not an independent benchmark')}
@@ -303,6 +465,7 @@ def build():
 ('Option order','Permute options, labels and evidence together; report aligned order consistency. New choice-padding variants need reviewed impossibility proofs.','Implemented; future matched audit proposed'),
 ('Forgetting','FULL changed weights/activations; external gap is observed; prompt/head/readout differences remain confounded.','Hypothesis, not established finding'),
 ('Full-corpus frozen backbone','Original pinned backbone + fresh random head, same dataset and protocol as current FULL.',escape(head_state)),
+('Full-corpus last block','Original pinned backbone; final block plus fresh head train; embeddings, preceding blocks and final norm frozen.',escape(last_state)),
 ('Data strategy','Improve trustworthy breadth rather than simply increasing template volume; exact game solvers and source-grounded documents supply different evidence.','Foundations implemented; training integration pending'),
 ('Qwen3.5 and images','Potential new backbone / multimodal route; current Qwen3-4B path is text-only. Images require new data/interface/resource work.','Deferred; no experiment launched'),
 ('Jev / published System One','82.70% published Jev MMLU-Pro snapshot; different harness, source deduplication and entrant setup.','Research recorded; no direct ranking claim')],'Implemented facts, hypotheses, proposals and deferred ideas')}
@@ -371,10 +534,13 @@ def build():
 <p>The current selected checkpoint’s external evaluation completed at {escape(aggregates['current']['evaluated_at_utc'])}. It was below earlier FULL overall, despite improved internal development and improved Belebele slices. Original native Qwen’s same-suite evaluation completed at {escape(original['evaluated_at_utc'])}, with higher accuracy and worse probability losses. The different original prompt/head means this cannot isolate backbone damage.</p>
 <p>Questions about forgetting, choice count, context length, SHAP/input sensitivity and layer movement led to the completed synthetic attribution assessment at {escape(attr_status['updated_at'])}. It showed current FULL 8/8 probes with larger weight/activation movement, and the earlier frozen head 5/8 despite unchanged backbone. These observations narrowed the interpretation but did not resolve general capability retention.</p>
 <p>The full-current frozen-backbone/fresh-head experiment was explicitly authorized and launched at 2026-10-04T16:12:54+00:00. Its saved state is {escape(head_state)}. Original choice/length strata are available; trained comparison strata are pending. Current training and completion receipts distinguish this job from historical owners.</p>''')}
+{detail('2026-10-05 · matched final-block arm', f'''
+<p>The user authorized the final transformer block plus a fresh 265-way head on the original pinned Qwen3-4B. The embedding, preceding 35 blocks and final backbone normalization remain frozen. The arm uses the same immutable dataset, seed, fresh head initialization, deterministic epoch plan and one-epoch exposure as current FULL and current head-only. The last-block learning rate is the previously used full-backbone rate, 0.00001; no hyperparameter search or new data was introduced.</p>
+<p>Saved state at this record: {escape(last_state)}. The durable completion job verifies the selected development checkpoint, exact matched exposure and unchanged frozen weights before serial evaluation on the same 17,874-item suite. That evaluation is exploratory reuse, with no external checkpoint selection or tuning.</p>''')}
 </section>
 <section class="surface"><p><strong>What remains unresolved</strong></p>
 <p>We do not yet know how much of the external gap comes from head/readout alignment, prompts, training distribution, choice cardinality, model adaptation, forgetting, or the differing old/current cohorts. We also do not know whether newly generated games/documents improve non-game transfer, long-context integration, or multilingual reliability: they have not been trained or measured in this run.</p>
-<p>The useful next evidence is a matched fresh head on the frozen original backbone, internal held-out evaluation under a declared boundary, and a separately designed frozen system test. Keep the observed external suite exploratory, preserve raw artifacts, and change one major experimental difference at a time. This follows the Pragmatic Programmer principle of deliberate experiments and avoiding accidental complexity.</p></section>
+<p>The matched fresh-head control and the final-block arm provide controlled evidence with the same current corpus. Internal held-out evaluation under a declared boundary and a separately designed frozen system test remain future evidence. Keep the observed external suite exploratory, preserve raw artifacts, and change one major experimental difference at a time. This follows the Pragmatic Programmer principle of deliberate experiments and avoiding accidental complexity.</p></section>
 '''
     source_rows = [(link(path,path),f'<code>{digest}</code>') for path,digest in sorted(SOURCES.items()) if not path.endswith('rows.jsonl')]
     source_section = '<section class="surface" id="sources"><p><strong>Evidence and reproducibility</strong></p><p>The builder reads only explicitly named external aggregate files. All core tables and curves are embedded; no CDN, external script or network dependency is needed to read this record. Linked detailed reports and source files are optional drill-downs and require the repository to remain beside this file.</p>'
@@ -383,7 +549,7 @@ def build():
     theme = ''.join(f'--{key}:{value};' for key,value in PALETTE.items())
     theme += ''.join(f'--{role}:var(--{token});' for role,token in PRESENTATION.items())
     style = '''
-*{box-sizing:border-box}body{margin:0;background:var(--canvas);color:var(--ink);font:16px/1.6 system-ui,sans-serif}main{max-width:1120px;margin:auto;padding:36px 26px}h1{font-size:34px;line-height:1.2;letter-spacing:-.025em;max-width:880px;margin:12px 0 20px}p{margin:12px 0}.lead{font-size:19px;max-width:970px}.muted,small{color:var(--muted)}nav{display:flex;gap:10px 24px;flex-wrap:wrap;margin:26px 0}a{color:var(--blue);text-underline-offset:3px}a:focus-visible,summary:focus-visible,button:focus-visible{outline:3px solid var(--blue);outline-offset:4px}.surface{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:24px;margin:22px 0}.surface>p:first-child{font-size:19px;margin-top:0}details{border-top:1px solid var(--line);padding:16px 0}summary{cursor:pointer;font-weight:600;padding:2px 0}.detail-body{padding:8px 0 0}details:last-child{padding-bottom:0}.scroll{overflow-x:auto;margin:20px 0}table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:14px}caption{text-align:left;color:var(--muted);padding-bottom:8px;font-size:13px}td,th{text-align:left;border-bottom:1px solid var(--line);padding:12px 10px;vertical-align:top}thead th{color:var(--muted);font-size:13px}tbody th{font-weight:500}td{min-width:76px}code{font-size:12px;overflow-wrap:anywhere}.completed{color:var(--completed);font-weight:650}.proposed{color:var(--proposed);font-weight:650}svg{width:100%;height:auto;display:block;margin:18px 0}svg text{font:15px system-ui;fill:var(--muted)}.bar.original{fill:var(--original)}.bar.previous{fill:var(--previous)}.bar.current{fill:var(--current)}.grid{stroke:var(--line);stroke-width:1}.trace{fill:none;stroke-width:2.5;stroke:var(--development)}.point{fill:var(--development)}.marker{stroke-width:1.5;stroke-dasharray:5 4}.marker.selected{stroke:var(--selected)}.marker.recovery{stroke:var(--recovery)}button{font:inherit;border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:6px;padding:7px 12px;cursor:pointer}.toolbar{display:flex;gap:10px;margin-top:20px}footer{color:var(--muted);font-size:13px;margin:24px 0}@media(max-width:650px){main{padding:20px 14px}h1{font-size:28px}.lead{font-size:17px}.surface{padding:17px}td,th{padding:10px 8px}table{min-width:530px}nav{gap:8px 18px}svg text{font-size:16px}}@media print{body{background:var(--paper)}main{max-width:none;padding:0}.surface{border-radius:0;break-inside:avoid}.toolbar,nav{display:none}summary{font-size:18px}a{color:var(--ink)}.scroll{overflow:visible}table{font-size:11px}footer{font-size:10px}}
+*{box-sizing:border-box}body{margin:0;background:var(--canvas);color:var(--ink);font:16px/1.6 system-ui,sans-serif}main{max-width:1120px;margin:auto;padding:36px 26px}h1{font-size:34px;line-height:1.2;letter-spacing:-.025em;max-width:880px;margin:12px 0 20px}p{margin:12px 0}.lead{font-size:19px;max-width:970px}.muted,small{color:var(--muted)}nav{display:flex;gap:10px 24px;flex-wrap:wrap;margin:26px 0}a{color:var(--blue);text-underline-offset:3px}a:focus-visible,summary:focus-visible,button:focus-visible{outline:3px solid var(--blue);outline-offset:4px}.surface{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:24px;margin:22px 0}.surface>p:first-child{font-size:19px;margin-top:0}details{border-top:1px solid var(--line);padding:16px 0}summary{cursor:pointer;font-weight:600;padding:2px 0}.detail-body{padding:8px 0 0}details:last-child{padding-bottom:0}.scroll{overflow-x:auto;margin:20px 0}table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:14px}caption{text-align:left;color:var(--muted);padding-bottom:8px;font-size:13px}td,th{text-align:left;border-bottom:1px solid var(--line);padding:12px 10px;vertical-align:top}thead th{color:var(--muted);font-size:13px}tbody th{font-weight:500}td{min-width:76px}code{font-size:12px;overflow-wrap:anywhere}.completed{color:var(--completed);font-weight:650}.proposed{color:var(--proposed);font-weight:650}svg{width:100%;height:auto;display:block;margin:18px 0}svg text{font:15px system-ui;fill:var(--muted)}svg .label,svg .value{fill:var(--ink)}svg .tick{font-size:13px}svg .group{font-size:13px;font-weight:600}.hit{fill:transparent}.row:hover .hit{fill:var(--canvas)}.bar.matched{fill:var(--matched)}.bar.reference{fill:var(--reference)}.grid{stroke:var(--line);stroke-width:1}.trace{fill:none;stroke-width:2.5;stroke:var(--development)}.point{fill:var(--development)}.marker{stroke-width:1.5;stroke-dasharray:5 4}.marker.selected{stroke:var(--selected)}.marker.recovery{stroke:var(--recovery)}button{font:inherit;border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:6px;padding:7px 12px;cursor:pointer}.toolbar{display:flex;gap:10px;margin-top:20px}footer{color:var(--muted);font-size:13px;margin:24px 0}@media(max-width:650px){main{padding:20px 14px}h1{font-size:28px}.lead{font-size:17px}.surface{padding:17px}td,th{padding:10px 8px}table{min-width:530px}nav{gap:8px 18px}svg text{font-size:16px}}@media print{body{background:var(--paper)}main{max-width:none;padding:0}.surface{border-radius:0;break-inside:avoid}.toolbar,nav{display:none}summary{font-size:18px}a{color:var(--ink)}.scroll{overflow:visible}table{font-size:11px}footer{font-size:10px}}
 '''
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Horscht · consolidated project record · 2026-10-04</title><style>:root{{{theme}}}{style}</style></head><body><main>{overview}{extra}{source_section}<div class="toolbar" hidden id="controls"><button id="expand">Expand all details</button><button id="collapse">Collapse all details</button><button id="print">Print / save PDF</button></div><footer>Saved project record · {observed} · All core results embedded; historical artifacts preserved.</footer></main><script>document.getElementById('controls').hidden=false;document.getElementById('expand').onclick=()=>document.querySelectorAll('details').forEach(d=>d.open=true);document.getElementById('collapse').onclick=()=>document.querySelectorAll('details').forEach(d=>d.open=false);document.getElementById('print').onclick=()=>{{document.querySelectorAll('details').forEach(d=>d.open=true);window.print()}};</script></body></html>'''
 

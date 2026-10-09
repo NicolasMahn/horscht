@@ -15,8 +15,8 @@ Prepared and verified on 2026-10-09 for Horscht v0.1, based on Qwen3-4B.
   rebuild and desktop/mobile rendering checked.
 - Tests: 760 passed locally; fresh source-only environment 751 passed and nine
   explicitly skipped historical checks whose run artifacts are not distributed.
-- GitHub: release/horscht-v0.1 branch prepared for authenticated push to the
-  existing private repository. Visibility is not changed.
+- GitHub: release/horscht-v0.1 pushed to the existing private repository.
+  Release implementation commit: 3ffe7ba. Visibility is not changed.
 - Hugging Face: upload pending local authentication and destination namespace.
   Local upload dry-run and all artifact checksums pass; no upload is claimed.
 

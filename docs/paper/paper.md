@@ -6,6 +6,8 @@ Nicolas Mahn · Project technical report · 2026-10-09 · Exploratory results
 
 Horscht adapts the post-trained Qwen3-4B backbone to return a probability distribution over 2–265 supplied text choices in one forward pass. A normalized last-token representation feeds a linear decision head; the final transformer block and head are trained while earlier backbone weights remain frozen. The current checkpoint continues a prior 128,263-row training run on a 23,006-row mixture of historical replay, engine-verified games, independently reviewed document questions, and public training partitions. A fixed 128-row development subset selects update 1080 from five saved candidates. On a previously observed 17,874-item external suite, the selected checkpoint reaches 50.40% accuracy, compared with 49.14% for its warm start and 51.72% for the original Qwen3-4B immediate-answer label-likelihood reference. The current model reaches 38.63% on MMLU-Pro, 85.40% on five Belebele language variants, and 38.53% on six BBH tasks. These are descriptive results from adaptive benchmark reuse, not a new confirmatory test. A separate 64-row temperature fit is exploratory, and the internal test remains deferred. We report the adaptation contract, data lineage, experiment history, aggregate evidence, and unresolved generalization and redistribution limits.
 
+![Accuracy by benchmark for the previous checkpoint, current checkpoint and original Qwen3-4B readout.](figures/benchmark-comparison.svg "Figure 1. The continuation improves all three benchmark aggregates, while the original immediate-answer reference remains ahead. These are exploratory results on the same reused suite; the original model uses a different readout.")
+
 ## 1. Purpose and scope
 
 The project investigates whether a language model's representation can support a simple decision interface without generating an answer or a reasoning trace. An application supplies context, a question, and candidate options. Horscht returns probabilities and a selected option. The choices can change between requests; output positions refer to the choices in the current request rather than a global label vocabulary. This creates a compact interface for classification, document questions, finite decisions, and tasks with explicit outcome distributions.
@@ -27,6 +29,8 @@ Choice permutations move option text, stable choice identities, labels, and all 
 The historical corpus contains 142,629 rows. Its immutable 2026-10-01 snapshot contains 128,263 training, 7,202 development, and 7,164 test rows. Much of this historical material was AI-authored; structural validation and recorded probability evidence must not be mistaken for comprehensive independent semantic or language verification. The [probability-target contract](../probability-dataset-v2.md) distinguishes exact derivations, explicit stochastic processes, empirical frequencies, and unverified teacher estimates. The current continuation does not use the proposed one-million-row target in that document as an achieved dataset size.
 
 The 2026-10-08-v4 continuation snapshot contains 43,723 rows. Related documents, translations, game states, trajectories, parent links, choice-order variants, and historical groups are joined before splitting or sampling. Original split assignments are retained, including historical rows omitted from replay. Previously trained groups cannot become holdouts; conflicting connected groups are excluded. Calibration contains only fresh, unlinked groups. These controls reduce known leakage paths but do not prove semantic independence.
+
+![Number of continuation training questions from each of six sources.](figures/continuation-sources.svg "Figure 2. Composition of the 23,006-question continuation training split. This is the later mixture, not the complete training history; replay repeats earlier examples.")
 
 | Source | Train | Development | Calibration | Internal test |
 | --- | ---: | ---: | ---: | ---: |
@@ -57,6 +61,8 @@ The continuation warm-started weights from that last-block checkpoint but reset 
 Execution used an AMD Radeon 8060S Graphics device, PyTorch 2.11.0+rocm10.0.0, Transformers 5.17.0, FP32 parameters, BF16 autocast, and flash attention. Audited recovery revisions resumed from saved optimizer boundaries after resource interruptions. They retained scheduler, RNG, optimizer, and cursor state. Compact training checkpoints reference a checksummed immutable warm-start checkpoint and carry changed tensors; they are not standalone full backbones. The portable export verifies all 387 non-final-block tensors against the pinned upstream backbone cast to FP32, then packages 11 final-block tensors and two head tensors. A CPU inference smoke test passed with an invented input and verified the formatter, normalization, pooling, and mask; GPU export equivalence remains untested. Release restoration and distribution details belong to the [model release record](../../release/model/README.md). No controlled latency or energy comparison is reported.
 
 The original plan used full development selection over 5,417 rows at updates 0, 360, 720, 1080, and 1438. A recorded deadline amendment changed remaining selection to a shared fixed stratified **128-row** subset and calibration to **64 rows**. Source quotas and language/token bands were chosen without outcomes. All five saved candidate hashes were bound before external inference. Selection minimized development soft cross-entropy; ties favored earlier updates. Diagnostic argmax agreement did not select the checkpoint. The original full-development and full-calibration plans are not completed claims for this release.
+
+![Development cross-entropy at five saved checkpoints, with update 1080 highlighted.](figures/development-selection.svg "Figure 3. Five evaluations on the same 128-question development panel. Only the saved checkpoints were measured; this is not a per-step training-loss curve. The final two candidates are nearly tied. The vertical axis is zoomed.")
 
 | Update | Development soft CE (nats) | Target argmax agreement |
 | ---: | ---: | ---: |
@@ -92,6 +98,8 @@ NLL is mean −log p of the gold choice. Brier is the mean sum of squared differ
 
 For the earlier matched old-corpus arms, the aggregate record is:
 
+![Overall external accuracy for head-only, final-block and full-backbone adaptation, with the later attention experiment separated.](figures/adaptation-arms.svg "Figure 4. Final-block adaptation was the strongest of the three linear-head arms under the recorded old-corpus recipe. The later attention-head experiment is separate in time and protocol; these results do not establish a universal ranking of architectures.")
+
 | Old-corpus adaptation | Overall | MMLU-Pro | Belebele | BBH |
 | --- | ---: | ---: | ---: | ---: |
 | Head only; backbone frozen | 45.84% | 32.06% | 85.29% | 36.60% |
@@ -102,6 +110,8 @@ For the earlier matched old-corpus arms, the aggregate record is:
 The linear-head comparison supports retaining limited final-block adaptation **under that recorded training recipe**. It does not establish that restricted adaptation generally beats full fine-tuning, which may require a different learning rate or exposure. The later attention arm is shown separately in time and protocol; changing architecture can change optimization behavior. The current continuation changes data, learning-rate schedule, token budget, initialization history, and selection scope together. Its gain cannot be attributed causally to any one new source, to longer inputs, or to soft targets alone. No source-removal ablations or multi-seed large-run replications were completed.
 
 All external aggregates above derive from allowlisted aggregate artifacts. The latest aggregate checksum is verified against its completion receipt in the [report evidence](evidence.json); no benchmark questions, answers, or per-item predictions are included.
+
+![Current-model accuracy for six BBH tasks alongside uniform-choice baselines.](figures/bbh-task-results.svg "Figure 5. Logical deduction and shuffled-object tracking behave very differently. All three tracking scores fall below their respective uniform-choice baselines. Each task has 250 questions; no uncertainty intervals are claimed.")
 
 ## 6. Related work
 
@@ -125,7 +135,7 @@ The most informative next result would be one predeclared evaluation on fresh, i
 
 ## Appendix A. Reproduction and evidence
 
-The report snapshot is dated 2026-10-09. [paper.md](paper.md) is the editable source; [paper.html](paper.html) is a standalone rendering with embedded styles and no remote dependencies. Install `docs/paper/requirements.txt` if needed, then run `python docs/paper/render.py` from the repository root. With local receipts present, it verifies source hashes and aggregate bindings before rendering; in a public checkout it validates and uses the committed `evidence.json` snapshot. This command reads only explicit aggregate/manifest allowlists and performs no model inference or benchmark download.
+The report snapshot is dated 2026-10-09. [paper.md](paper.md) is the editable source; [paper.html](paper.html) is a standalone rendering with embedded styles and no remote dependencies. Install `docs/paper/requirements.txt` if needed, then run `uv run --group paper python docs/paper/render.py` from the repository root. With local receipts present, it verifies source hashes and aggregate bindings before rendering; in a public checkout it validates and uses the committed `evidence.json` snapshot. This command reads only explicit aggregate/manifest allowlists and performs no model inference or benchmark download. The five figures are rebuilt with Matplotlib from those aggregates and the published dataset manifest; editable vector SVG and high-resolution PNG copies are saved under `figures/`. The HTML embeds each vector figure so it can also be read as a single offline file. Tables remain available beneath the figures.
 
 To restore the selected decision model, use the [release model instructions](../../release/model/README.md) and its checksum-bound portable artifact. Preserve the pinned upstream revision, tokenizer, non-affine normalization, choice mask, and plain input formatter. A trainable overlay is a dependency on its verified base, not a free-standing model. The training checkpoints also preserve optimizer, scheduler, sample cursor, and RNG for audited continuation. Do not substitute a Qwen3.5 checkpoint or a different tokenizer.
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import base64
 import json
 from html import escape
 from pathlib import Path
@@ -122,14 +123,34 @@ def evidence() -> dict:
 
 def build() -> None:
     verified = evidence()
+    from figures import build_figures
+    build_figures(verified)
     (PAPER / "evidence.json").write_text(json.dumps(verified, indent=2, sort_keys=True) + "\n")
     source = (PAPER / "paper.md").read_text()
     renderer = MarkdownIt("commonmark", {"html": False}).enable("table")
     renderer.renderer.rules["table_open"] = lambda tokens, index, options, env: '<div class="table-scroll"><table>\n'
     renderer.renderer.rules["table_close"] = lambda tokens, index, options, env: '</table></div>\n'
+    def figure(tokens, index, options, env):
+        token = tokens[index]
+        relative = Path(token.attrGet("src"))
+        if relative.parent != Path("figures") or relative.suffix != ".svg":
+            raise ValueError("Paper figures must be local generated SVGs")
+        encoded = base64.b64encode((PAPER / relative).read_bytes()).decode()
+        caption = escape(token.attrGet("title") or "")
+        return (f'<figure><div class="figure-plot" tabindex="0" aria-label="Scrollable chart"><img src="data:image/svg+xml;base64,{encoded}" alt="{escape(token.content, quote=True)}"></div>'
+                f'<figcaption>{caption}<span class="figure-downloads">'
+                f'<a href="{relative.as_posix()}" download>SVG</a> · '
+                f'<a href="{relative.with_suffix(".png").as_posix()}" download>PNG</a></span>'
+                '</figcaption></figure>')
+    renderer.renderer.rules["image"] = figure
     tokens = renderer.parse(source)
     navigation = []
     for index, token in enumerate(tokens):
+        if (token.type == "paragraph_open" and index + 2 < len(tokens)
+                and tokens[index + 1].type == "inline"
+                and len(tokens[index + 1].children or []) == 1
+                and tokens[index + 1].children[0].type == "image"):
+            token.hidden = tokens[index + 2].hidden = True
         if token.type == "heading_open":
             title = tokens[index + 1].content
             anchor = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
@@ -137,6 +158,11 @@ def build() -> None:
             if token.tag == "h2":
                 navigation.append(f'<a href="#{anchor}">{escape(title)}</a>')
     content = renderer.renderer.render(tokens, renderer.options, {})
+    table_titles = iter(("Exact dataset split counts", "Checkpoint selection measurements",
+                         "Exact benchmark scores", "Probability scores", "Exact adaptation scores"))
+    content = re.sub(r'<div class="table-scroll"><table>.*?</table></div>',
+                     lambda match: '<details class="measurements"><summary>' + next(table_titles)
+                     + '</summary>' + match.group(0) + '</details>', content, flags=re.S)
     colors = ";".join(f"--{role}:{PALETTE[value]}" for role, value in PRESENTATION.items())
     styles = """
 *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text);background:var(--background);font-synthesis:none}
@@ -145,7 +171,20 @@ a{color:var(--accent);text-underline-offset:3px}a:hover{text-decoration-thicknes
 @media(max-width:650px){.frame{padding:20px 14px 36px}.masthead{flex-wrap:wrap}.layout{gap:20px}article{padding:24px 20px;border-radius:12px}p,li{font-size:15px}table{font-size:11px}th,td{padding:10px 5px}h2{font-size:24px}}
 @media print{@page{size:A4;margin:19mm 17mm}body{background:var(--surface)}.frame{padding:0;max-width:none}.masthead,.toc,.actions,footer{display:none}.layout{display:block}article{border:0;box-shadow:none;padding:0;border-radius:0}h1{font-size:31pt}h2{font-size:17pt;break-after:avoid;padding-top:14px;margin-top:22px}p,li{font-size:10.5pt;line-height:1.55}h1+p{font-size:9pt}.table-scroll{overflow:visible}table{font-size:8pt;break-inside:avoid}tr{break-inside:avoid}th{font-size:7.5pt}a{color:var(--text);text-decoration:none}code{font-size:8pt}p{orphans:3;widows:3}}
 """
-    html = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Horscht Qwen3-4B technical report: a 265-choice decision head, frozen-prefix adaptation, data lineage and exploratory aggregate results."><title>Horscht · Qwen3-4B technical report</title><style>:root{{{colors}}}{styles}</style></head><body><div class="frame"><header class="masthead"><a class="brand" href="../../README.md">HORSCHT</a><span>TECHNICAL REPORT · 2026-10-09</span><div class="actions"><a class="pill" href="paper.md">Markdown source</a><a class="pill" href="evidence.json">Verified evidence</a></div></header><div class="layout"><nav class="toc" aria-label="Report sections">{''.join(navigation)}</nav><article>{content}</article></div><footer>Repository evidence snapshot · Qwen3-4B · Aggregate evaluation only · No remote scripts, fonts, or images.</footer></div></body></html>'''
+    styles += """
+figure{margin:30px -12px 24px;padding:18px 10px 15px;border:1px solid var(--border);border-radius:12px;background:var(--surface);break-inside:avoid}
+.figure-plot{overflow-x:auto}figure img{display:block;width:100%;height:auto}figcaption{font-family:system-ui,-apple-system,sans-serif;font-size:12px;line-height:1.65;color:var(--secondary);padding:12px 14px 0}.figure-downloads{display:block;font-size:11px;margin-top:7px}
+.measurements{border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin:20px 0}.measurements summary{cursor:pointer;color:var(--accent);font-size:12px;font-weight:600;padding:13px 0}.measurements table{margin:0 0 12px}
+@media(max-width:650px){figure{margin:25px -12px;padding:8px 2px 12px}figure img{min-width:650px}figcaption{font-size:11px;padding:8px 10px 0}}
+@media print{figure{margin:18px 0;padding:8px;border-radius:0}figcaption{font-size:8pt;line-height:1.4}.figure-downloads{display:none}.measurements{display:block}.measurements>summary{font-size:8pt;color:var(--text)}}
+"""
+    html = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Horscht Qwen3-4B technical report: a 265-choice decision head, frozen-prefix adaptation, data lineage and exploratory aggregate results."><title>Horscht · Qwen3-4B technical report</title><style>:root{{{colors}}}{styles}</style></head><body><div class="frame"><header class="masthead"><a class="brand" href="../../README.md">HORSCHT</a><span>TECHNICAL REPORT · 2026-10-09</span><div class="actions"><a class="pill" href="paper.md">Markdown source</a><a class="pill" href="evidence.json">Verified evidence</a></div></header><div class="layout"><nav class="toc" aria-label="Report sections">{''.join(navigation)}</nav><article>{content}</article></div><footer>Repository evidence snapshot · Qwen3-4B · Aggregate evaluation only · No remote scripts, fonts, or images.</footer></div><script>
+const printOpened = [];
+addEventListener('beforeprint', () => {{
+  document.querySelectorAll('details.measurements:not([open])').forEach(node => {{node.open = true; printOpened.push(node);}});
+}});
+addEventListener('afterprint', () => {{printOpened.splice(0).forEach(node => node.open = false);}});
+</script></body></html>'''
     (PAPER / "paper.html").write_text(html)
     print(json.dumps({"rendered": str(PAPER / "paper.html"), "verified_external_rows": 17874, "selected_update": 1080, "remote_rendering_dependencies": 0}))
 

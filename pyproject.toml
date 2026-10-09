@@ -17,6 +17,9 @@ dependencies = [
 [dependency-groups]
 dev = ["pytest>=8,<10"]
 evaluation = ["pyarrow>=18"]
+paper = [
+    "matplotlib>=3.9,<4",
+]
 
 [[tool.uv.index]]
 name = "pytorch-cpu"

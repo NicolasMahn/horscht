@@ -248,6 +248,7 @@ def build_figures(evidence: dict[str, Any], output_dir: Path | None = None) -> d
             try:
                 paths = {extension: destination / f"{name}.{extension}" for extension in ("svg", "png")}
                 fig.savefig(paths["svg"], metadata={"Date": None, "Creator": "Horscht public aggregate figure builder"})
+                paths["svg"].write_text("\n".join(line.rstrip() for line in paths["svg"].read_text().splitlines()) + "\n")
                 fig.savefig(paths["png"], dpi=200, metadata={"Software": "Horscht public aggregate figure builder"})
                 artifacts[name] = paths
             finally:

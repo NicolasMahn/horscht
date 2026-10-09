@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 
-SCRIPT = Path(__file__).resolve().parents[1] / "runs/overnight-2026-09-30/inspect-assignment-contract.py"
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts/inspect_assignment_contract.py"
 spec = importlib.util.spec_from_file_location("inspect_assignment_contract", SCRIPT)
 inspector = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(inspector)

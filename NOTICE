@@ -1,0 +1,14 @@
+Horscht licensing scope
+
+The root MIT license applies to original project code and documentation only.
+It does not relicense pretrained model weights, model adaptations, training
+records, source documents, third-party code, or benchmark datasets.
+
+Model release terms and upstream notices live under release/model/.
+Dataset terms and source-specific attribution live under release/dataset/.
+Source-specific licenses take precedence over any collection-level license.
+The training mixture includes SciQ (CC BY-NC 3.0); the model release must not
+be represented as unrestricted for commercial use.
+
+External benchmark items and internal sealed test data are not distributed.
+Published evaluation evidence contains aggregate statistics only.

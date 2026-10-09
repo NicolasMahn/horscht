@@ -36,7 +36,7 @@ LEGACY_DIR = TRAINING_DIR / "broad-v1"
 PILOT_FILE = TRAINING_DIR / "probability-v2-pilot.jsonl"
 ASSIGNMENT_SCHEMA_VERSION = "probability-v2-assignment-v1"
 AUTHORING_GUIDANCE_VERSION = "probability-v2-semantic-grounding-v2"
-CHOICE_COUNT_POLICY_FILE = TRAINING_DIR / "probability-v2-cardinality-policy-v1.json"
+CHOICE_COUNT_POLICY_FILE = Path(__file__).parent / "policies/probability-v2-cardinality-policy-v1.json"
 _CARDINALITY_POLICY = json.loads(CHOICE_COUNT_POLICY_FILE.read_text(encoding="utf-8"))
 CHOICE_COUNT_POLICY_VERSION = _CARDINALITY_POLICY["choice_count_policy_version"]
 CHOICE_COUNT_POLICY = _CARDINALITY_POLICY["tier_counts"]
@@ -45,7 +45,7 @@ MEDIUM_CARDINALITY_OPERATIONS = frozenset(_CARDINALITY_POLICY["medium_operations
 HIGH_CARDINALITY_OPERATIONS = frozenset(_CARDINALITY_POLICY["high_operations"])
 MEDIUM_CARDINALITY_STRUCTURES = frozenset(_CARDINALITY_POLICY["medium_input_structures"])
 HIGH_CARDINALITY_STRUCTURES = frozenset(_CARDINALITY_POLICY["high_input_structures"])
-ANSWERABILITY_POLICY_FILE = TRAINING_DIR / "probability-v2-answerability-policy-v1.json"
+ANSWERABILITY_POLICY_FILE = Path(__file__).parent / "policies/probability-v2-answerability-policy-v1.json"
 _ANSWERABILITY_POLICY = json.loads(ANSWERABILITY_POLICY_FILE.read_text(encoding="utf-8"))
 ANSWERABILITY_POLICY_VERSION = _ANSWERABILITY_POLICY["answerability_policy_version"]
 ANSWERABILITY_MIX_PERCENT = _ANSWERABILITY_POLICY["default_mix_percent"]

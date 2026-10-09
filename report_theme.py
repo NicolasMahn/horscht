@@ -12,6 +12,8 @@ PALETTE = {
     "orange": "#b45a12",
     "rose": "#b83972",
     "olive": "#647a18",
+    "green": "#1a9a6c",
+    "magenta": "#e87ba4",
     "indigo": "#4a49a8",
     "brown": "#865132",
     "cyan": "#087aab",

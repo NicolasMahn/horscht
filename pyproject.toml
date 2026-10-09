@@ -9,6 +9,9 @@ dependencies = [
   "mistral-common>=1.8.6",
   "huggingface-hub>=1,<2",
   "plotly>=6,<7",
+  "beautifulsoup4>=4.12,<5",
+  "requests>=2.32,<3",
+  "markdown-it-py>=3,<5",
 ]
 
 [dependency-groups]

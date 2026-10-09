@@ -1,0 +1,164 @@
+{
+  "schema_version": 1,
+  "model": "previous-last-block",
+  "source_aggregate_sha256": "159c1e1ce9929ad6d664d7b614c3ace378da2c89e2bfc953ef76755980e6add7",
+  "scope": "Exploratory reuse of the same 17,874-question external suite; aggregate metrics only.",
+  "overall": {
+    "accuracy": 0.49138413337809106,
+    "correct": 8783,
+    "examples": 17874,
+    "multiclass_brier_score": 0.6286325858431332,
+    "negative_log_likelihood": 1.5324756048748365,
+    "uniform_baseline": {
+      "accuracy": 0.15559203223268275,
+      "multiclass_brier_score": 0.844407967767173,
+      "negative_log_likelihood": 1.9599560598945625
+    }
+  },
+  "by_source_slice": {
+    "bbh-logical-deduction-five-objects": {
+      "accuracy": 0.44,
+      "correct": 110,
+      "examples": 250,
+      "multiclass_brier_score": 0.6559344238264133,
+      "negative_log_likelihood": 1.3693863224401994,
+      "uniform_baseline": {
+        "accuracy": 0.20000000000000068,
+        "multiclass_brier_score": 0.8000000000000027,
+        "negative_log_likelihood": 1.6094379124340932
+      }
+    },
+    "bbh-logical-deduction-seven-objects": {
+      "accuracy": 0.424,
+      "correct": 106,
+      "examples": 250,
+      "multiclass_brier_score": 0.7240901923520918,
+      "negative_log_likelihood": 1.6284158271546922,
+      "uniform_baseline": {
+        "accuracy": 0.14285714285714285,
+        "multiclass_brier_score": 0.8571428571428596,
+        "negative_log_likelihood": 1.945910149055306
+      }
+    },
+    "bbh-logical-deduction-three-objects": {
+      "accuracy": 0.724,
+      "correct": 181,
+      "examples": 250,
+      "multiclass_brier_score": 0.4261787195983975,
+      "negative_log_likelihood": 0.7563939898289093,
+      "uniform_baseline": {
+        "accuracy": 0.3333333333333329,
+        "multiclass_brier_score": 0.6666666666666659,
+        "negative_log_likelihood": 1.0986122886681078
+      }
+    },
+    "bbh-tracking-shuffled-objects-five-objects": {
+      "accuracy": 0.176,
+      "correct": 44,
+      "examples": 250,
+      "multiclass_brier_score": 0.8804946997941235,
+      "negative_log_likelihood": 1.806204397481368,
+      "uniform_baseline": {
+        "accuracy": 0.20000000000000068,
+        "multiclass_brier_score": 0.8000000000000027,
+        "negative_log_likelihood": 1.6094379124340932
+      }
+    },
+    "bbh-tracking-shuffled-objects-seven-objects": {
+      "accuracy": 0.152,
+      "correct": 38,
+      "examples": 250,
+      "multiclass_brier_score": 0.8987279122308649,
+      "negative_log_likelihood": 2.070601515797062,
+      "uniform_baseline": {
+        "accuracy": 0.14285714285714285,
+        "multiclass_brier_score": 0.8571428571428596,
+        "negative_log_likelihood": 1.945910149055306
+      }
+    },
+    "bbh-tracking-shuffled-objects-three-objects": {
+      "accuracy": 0.312,
+      "correct": 78,
+      "examples": 250,
+      "multiclass_brier_score": 0.7395744607622045,
+      "negative_log_likelihood": 1.2165784241698112,
+      "uniform_baseline": {
+        "accuracy": 0.3333333333333329,
+        "multiclass_brier_score": 0.6666666666666659,
+        "negative_log_likelihood": 1.0986122886681078
+      }
+    },
+    "belebele-deu_Latn": {
+      "accuracy": 0.8322222222222222,
+      "correct": 749,
+      "examples": 900,
+      "multiclass_brier_score": 0.24979657253623078,
+      "negative_log_likelihood": 0.5026164867176588,
+      "uniform_baseline": {
+        "accuracy": 0.25,
+        "multiclass_brier_score": 0.75,
+        "negative_log_likelihood": 1.3862943611198737
+      }
+    },
+    "belebele-eng_Latn": {
+      "accuracy": 0.8766666666666667,
+      "correct": 789,
+      "examples": 900,
+      "multiclass_brier_score": 0.18377990158850463,
+      "negative_log_likelihood": 0.39123789337091497,
+      "uniform_baseline": {
+        "accuracy": 0.25,
+        "multiclass_brier_score": 0.75,
+        "negative_log_likelihood": 1.3862943611198737
+      }
+    },
+    "belebele-fra_Latn": {
+      "accuracy": 0.8455555555555555,
+      "correct": 761,
+      "examples": 900,
+      "multiclass_brier_score": 0.22466499788935326,
+      "negative_log_likelihood": 0.4665799834560347,
+      "uniform_baseline": {
+        "accuracy": 0.25,
+        "multiclass_brier_score": 0.75,
+        "negative_log_likelihood": 1.3862943611198737
+      }
+    },
+    "belebele-spa_Latn": {
+      "accuracy": 0.8177777777777778,
+      "correct": 736,
+      "examples": 900,
+      "multiclass_brier_score": 0.2648695207858629,
+      "negative_log_likelihood": 0.5372960919154716,
+      "uniform_baseline": {
+        "accuracy": 0.25,
+        "multiclass_brier_score": 0.75,
+        "negative_log_likelihood": 1.3862943611198737
+      }
+    },
+    "belebele-zho_Hans": {
+      "accuracy": 0.8388888888888889,
+      "correct": 755,
+      "examples": 900,
+      "multiclass_brier_score": 0.24032897543772283,
+      "negative_log_likelihood": 0.48899801897125417,
+      "uniform_baseline": {
+        "accuracy": 0.25,
+        "multiclass_brier_score": 0.75,
+        "negative_log_likelihood": 1.3862943611198737
+      }
+    },
+    "mmlu-pro-test": {
+      "accuracy": 0.3735893548930436,
+      "correct": 4436,
+      "examples": 11874,
+      "multiclass_brier_score": 0.7670399836453746,
+      "negative_log_likelihood": 1.939659610521011,
+      "uniform_baseline": {
+        "accuracy": 0.11099517820714597,
+        "multiclass_brier_score": 0.8890048217926751,
+        "negative_log_likelihood": 2.228983477718964
+      }
+    }
+  }
+}

@@ -5,11 +5,12 @@ from pathlib import Path
 import pytest
 
 from build_transfer_report import build
+from make_transfer_examples import make_transfer_examples
 
 
 def record():
     root = Path(__file__).resolve().parents[1]
-    examples = json.loads((root / 'data/transfer.json').read_text())
+    examples = make_transfer_examples()
     measurement = {'accuracy': 0.5, 'loss': 1.2,
                    'families': {ex['family']: {'accuracy': 0.5} for ex in examples},
                    'predictions': [dict(id=ex['id'], predicted=0,

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 
-SCRIPT = Path(__file__).resolve().parents[1] / "runs/overnight-2026-09-30/reconcile-dispatch-metadata.py"
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts/reconcile_dispatch_metadata.py"
 spec = importlib.util.spec_from_file_location("reconcile_dispatch_metadata", SCRIPT)
 dispatch = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(dispatch)

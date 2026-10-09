@@ -3,6 +3,8 @@
 import hashlib
 import itertools
 import json
+
+import pytest
 from collections import Counter, defaultdict
 
 from experiment import format_input
@@ -10,6 +12,8 @@ from make_transfer_examples import ROOT, make_transfer_examples
 
 
 def test_frozen_dataset_reproducible_and_manifest_matches():
+    if not (ROOT / "data/transfer.json").is_file():
+        pytest.skip("Historical frozen transfer dataset is not installed")
     payload = (ROOT / "data/transfer.json").read_bytes()
     examples = json.loads(payload)
     manifest = json.loads((ROOT / "data/transfer-manifest.json").read_text())

@@ -17,9 +17,13 @@ from build_current_training_report import chart, load as load_training
 from report_theme import PALETTE
 
 ROOT = Path(__file__).resolve().parent
-OUTPUT = ROOT / "runs/project-record-2026-10-04.html"
+# The familiar URL shows the short dashboard; the full record is one click away.
+DASHBOARD = ROOT / "runs/project-record-2026-10-04.html"
+RECORD = ROOT / "runs/project-record-2026-10-04-details.html"
 HEAD_RUN = "runs/current-corpus-head-only-2026-10-04"
 LAST_BLOCK_RUN = "runs/current-corpus-last-block-2026-10-05"
+ATTENTION_RUN = "runs/current-corpus-option-attention-2026-10-06"
+NEW_DATA_RUN = "runs/new-data-last-block-2026-10-08"
 BENCHMARK_ROOT = "data/external_evaluation/results"
 BENCHMARKS = {
     "original": f"{BENCHMARK_ROOT}/original-qwen-label-likelihood-2026-10-04/blind-aggregate-result.json",
@@ -28,6 +32,7 @@ BENCHMARKS = {
 }
 PRESENTATION = {
     "matched": "blue", "reference": "orange",
+    "head-only": "blue", "last-block": "green", "option-attention": "magenta", "full": "orange", "original": "muted",
     "development": "blue", "training": "teal", "selected": "good",
     "recovery": "orange", "completed": "good", "proposed": "orange",
     "hypothesis": "purple",
@@ -208,6 +213,156 @@ def current_last_block_state():
     return state, meaning, gpu, body
 
 
+def attention_training_output(process=None):
+    """Resolve the saved attention output pointer without allowing it to leave its run."""
+    if process is None:
+        process_path = ROOT / ATTENTION_RUN / 'process.json'
+        process = read(f'{ATTENTION_RUN}/process.json') if process_path.exists() else {}
+    run_root = (ROOT / ATTENTION_RUN).resolve()
+    declared = process.get('training_output')
+    if declared is None:
+        candidate = (run_root / 'attention-last-block').resolve()
+    elif not isinstance(declared, str) or not declared.strip():
+        raise ValueError('Option-attention training output pointer is invalid')
+    else:
+        pointer = Path(declared)
+        candidate = (pointer if pointer.is_absolute() else ROOT / pointer).resolve()
+    if not candidate.is_relative_to(run_root):
+        raise ValueError('Option-attention training output must remain inside its run directory')
+    if candidate.exists() and not candidate.is_dir():
+        raise ValueError('Option-attention training output is not a directory')
+    return candidate
+
+
+def current_attention_state():
+    """Describe the final old-corpus architecture run from its saved receipts."""
+    progress_path = f'{ATTENTION_RUN}/progress.json'
+    if not (ROOT / progress_path).exists():
+        progress_path = f'{ATTENTION_RUN}/training-status.json'
+    process_path = f'{ATTENTION_RUN}/process.json'
+    completion_path = f'{ATTENTION_RUN}/completion-status.json'
+    process = read(process_path) if (ROOT / process_path).exists() else {}
+    output_directory = attention_training_output(process)
+    output_relative = output_directory.relative_to(ROOT.resolve()).as_posix()
+    report_path = f'{output_relative}/report.json'
+    benchmark_path = f'{ATTENTION_RUN}/benchmark-report.json'
+    has_receipt = any((ROOT / path).exists() for path in (progress_path, process_path, completion_path, report_path, benchmark_path))
+    if not has_receipt:
+        return 'Not started', 'Option-conditioned attention head plus final transformer block.', '', ''
+
+    progress = read(progress_path) if (ROOT / progress_path).exists() else {}
+    completion = read(completion_path) if (ROOT / completion_path).exists() else {}
+    training_report = read(report_path) if (ROOT / report_path).exists() else {}
+    phase = progress.get('phase', 'starting')
+    status = progress.get('status')
+    unit = 'unknown'
+    if process.get('service'):
+        unit = subprocess.run(['systemctl', '--user', 'is-active', process['service']],
+                              capture_output=True, text=True).stdout.strip()
+
+    verified_training = (training_report.get('status') == 'completed'
+                         and training_report.get('selected_checkpoint_reload_verified') is True)
+    benchmark = attention_benchmark_report() if (ROOT / benchmark_path).exists() else None
+    if benchmark is not None and not verified_training:
+        raise ValueError('Option-attention external report exists without verified training completion')
+
+    if benchmark is not None:
+        # The finisher rebuilds this report before marking itself complete.
+        # Verified training and the hash-bound aggregate establish evaluation completion.
+        state = 'Training and external evaluation completed'
+        metric = benchmark['metrics']['overall']
+        meaning = (f'{metric["correct"]:,} / {metric["examples"]:,} aggregate items; '
+                   f'accuracy {metric["accuracy"]:.2%}; final planned old-corpus evaluation.')
+        body = (f'<p>The option-conditioned attention head (dimension 256) and final transformer block were trained on the frozen current corpus. '
+                f'The final development-selected checkpoint was verified before aggregate-only external scoring. '
+                f'This is the last planned external test for the old training corpus; further training and evaluation wait for newly admitted data.</p>')
+        body += (f'<p>Development selected update {training_report["best_update"]:,} with cross-entropy '
+                 f'{training_report["best_dev_soft_cross_entropy"]:.5f}. {link(report_path, "Selected development report")}</p>')
+        body += f'<p>Exploratory external suite: {metric["accuracy"]:.2%} accuracy ({metric["correct"]:,} / {metric["examples"]:,}), NLL {metric["negative_log_likelihood"]:.4f}, Brier {metric["multiclass_brier_score"]:.4f}. {link(benchmark_path, "Aggregate-only benchmark report")}</p>'
+    else:
+        if status == 'preparing':
+            state = f'Preparing · {phase}'
+        elif status == 'running':
+            state = f'Training · {phase}' if unit == 'active' or unit == 'unknown' else 'Training stopped · verify saved status'
+        elif status == 'interrupted':
+            state = 'Training interrupted'
+        elif status == 'failed':
+            state = 'Training failed'
+        elif verified_training or status == 'completed':
+            selection = completion.get('phase')
+            if selection == 'starting blind':
+                state = 'Training completed · external evaluation starting'
+            elif selection == 'frozen':
+                state = 'Checkpoint frozen · external evaluation pending'
+            else:
+                state = 'Training completed · external evaluation pending'
+        elif completion.get('phase') == 'frozen':
+            state = 'Prepared · checkpoint frozen, waiting for training'
+        elif completion.get('phase') == 'starting blind':
+            state = 'External evaluation starting'
+        elif completion.get('phase') == 'waiting':
+            state = 'Preparing · waiting for training'
+        elif process:
+            state = 'Service launched · awaiting saved training status' if unit == 'active' else 'Stopped · verify saved status'
+        else:
+            state = 'Prepared · awaiting saved training status'
+        updates = progress.get('global_update', 0)
+        total = progress.get('total_questions', 128263)
+        latest_development = progress.get('latest_development')
+        if latest_development and not updates:
+            meaning = (f'Initial development baseline: {latest_development["questions_done"]:,} / '
+                       f'{latest_development["questions"]:,}; no optimizer update yet.')
+        else:
+            meaning = f'{updates:,} / 8,017 updates; {progress.get("questions_seen", 0):,} / {total:,} training questions seen.'
+        body = ('<p>The final architecture arm pairs an option-conditioned attention head with Qwen’s final transformer block (block 35); '
+                'the embedding and preceding 35 blocks stay frozen. It uses the same frozen corpus, prompt, loss and one-epoch budget as the matched arms. '
+                'This is the last planned old-corpus test. Further training and evaluation wait for newly admitted game and document data.</p>')
+        if progress:
+            observed = progress.get('observed_at') or progress.get('updated_at_utc')
+            if latest_development and not updates:
+                detail = (f'Initial development baseline: {latest_development["questions_done"]:,} / '
+                          f'{latest_development["questions"]:,} questions in the current pass. No optimizer update has occurred yet.')
+                if observed:
+                    detail += f' Saved as of {escape(observed)}.'
+                body += f'<p>{detail}</p>'
+            elif observed:
+                body += f'<p>Saved training status: {escape(status or "unknown")} · {escape(phase)}; {updates:,} / 8,017 updates and {progress.get("questions_seen", 0):,} training questions seen as of {escape(observed)}.</p>'
+            if status == 'running' and 'measured_update_seconds' in progress:
+                body += (f'<p>Measured throughput: {progress["measured_questions_per_second"]:.2f} questions/second; '
+                         f'{progress["measured_update_seconds"]:.2f} seconds/update. Estimated completion '
+                         f'{escape(progress["estimated_training_completion_at"])}.</p>')
+        if verified_training:
+            body += (f'<p>Selected development cross-entropy {training_report["best_dev_soft_cross_entropy"]:.5f} at update '
+                     f'{training_report["best_update"]:,}; checkpoint reload verified. No external result is recorded yet. '
+                     f'{link(report_path, "Selected development report")}</p>')
+        if completion:
+            body += f'<p>{link(completion_path, "Completion and evaluation status")}</p>'
+    if (ROOT / process_path).exists():
+        body += f'<p>{link(progress_path, "Latest saved progress")} · {link(process_path, "Training process receipt")}</p>'
+    gpu = ('GPU owned by option-attention training or evaluation' if unit == 'active'
+           else 'Option-attention job ended; saved receipts determine completion.')
+    return state, meaning, gpu, body
+
+
+def attention_benchmark_report():
+    """Load only the fixed aggregate result bound to the final architecture report."""
+    report_path = f'{ATTENTION_RUN}/benchmark-report.json'
+    if not (ROOT / report_path).exists():
+        return None
+    report = read(report_path)
+    aggregate_path = f'{BENCHMARK_ROOT}/current-corpus-option-attention-2026-10-06/blind-aggregate-result.json'
+    aggregate = read(aggregate_path)
+    if report.get('aggregate_path') != aggregate_path:
+        raise ValueError('Option-attention aggregate path differs from its allowlist')
+    if SOURCES[aggregate_path] != report.get('aggregate_sha256'):
+        raise ValueError('Option-attention aggregate differs from its report binding')
+    metrics = report['metrics']
+    if aggregate['candidate_results']['last-block'] != metrics:
+        raise ValueError('Option-attention metrics differ from the bound aggregate')
+    validate_metrics(metrics)
+    return report
+
+
 def validate_metrics(metrics):
     overall = metrics['overall']
     slices = list(metrics['by_source_slice'].values())
@@ -255,13 +410,16 @@ def corpus_counts():
 
 
 def matched_arms():
-    """External metrics for the three arms trained on the same frozen corpus, once all are scored."""
+    """External metrics for completed arms trained on the same frozen corpus."""
     path = f'{LAST_BLOCK_RUN}/benchmark-report.json'
-    if not (ROOT / path).exists():
-        return {}
-    report = read(path)
-    arms = {'head-only': report['comparison_head_only'], 'last-block': report['metrics'],
-            'full': report['comparison_current_full']}
+    arms = {}
+    if (ROOT / path).exists():
+        report = read(path)
+        arms.update({'head-only': report['comparison_head_only'], 'last-block': report['metrics'],
+                     'full': report['comparison_current_full']})
+    attention = attention_benchmark_report()
+    if attention is not None:
+        arms['option-attention'] = attention['metrics']
     for metrics in arms.values():
         validate_metrics(metrics)
     return arms
@@ -304,9 +462,322 @@ def benchmark_chart(groups):
     return ''.join(parts)
 
 
+def theme_css():
+    return (''.join(f'--{key}:{value};' for key, value in PALETTE.items())
+            + ''.join(f'--{role}:var(--{token});' for role, token in PRESENTATION.items()))
+
+
+TOTAL_UPDATES = 8017
+DASHBOARD_RUNS = [
+    # key, name, what was trained, run directory, training output directory
+    ('head-only', 'Answer layer only', 'Qwen frozen. Only a new answer layer was trained.', HEAD_RUN, 'head'),
+    ('last-block', 'Last block + answer layer', 'Qwen’s final block and a new answer layer were trained.', LAST_BLOCK_RUN, 'last-block'),
+    ('option-attention', 'Last block + attention head', 'Qwen’s final block and a new answer head that compares the options were trained.', ATTENTION_RUN, 'attention-last-block'),
+    ('full', 'Whole model', 'Every Qwen weight and a new answer layer were trained.', 'runs/current-corpus-2026-10-01', None),
+]
+
+
+def dashboard_runs():
+    """Development history, kept checkpoint and outside result for each run on the current corpus."""
+    arms = matched_arms()
+    full_history, full_report, *_ = load_training()
+    runs = []
+    for key, name, description, run, output in DASHBOARD_RUNS:
+        progress = read(f'{run}/progress.json') if (ROOT / run / 'progress.json').exists() else {}
+        if output is None:
+            history, report = full_history, full_report
+        else:
+            if key == 'option-attention':
+                output_directory = attention_training_output()
+                history_path = (output_directory / 'history.json').relative_to(ROOT.resolve()).as_posix()
+                report_path = (output_directory / 'report.json').relative_to(ROOT.resolve()).as_posix()
+            else:
+                history_path = f'{run}/{output}/history.json'
+                report_path = f'{run}/{output}/report.json'
+            if not (ROOT / history_path).exists():
+                continue
+            history = read(history_path)
+            report = read(report_path) if (ROOT / report_path).exists() else None
+        # Update 0 is the untrained head, so it is not a result of training.
+        dev = [(point['update'], point['dev']) for point in history if 'dev' in point and point['update'] > 0]
+        finished = bool(report and report['status'] == 'completed' and report['selected_checkpoint_reload_verified'])
+        kept = (report['best_update'], report['selected_checkpoint_development']) if finished else None
+        runs.append({'key': key, 'name': name, 'description': description, 'dev': dev,
+                     'kept': kept, 'outside': arms.get(key, {}).get('overall'), 'progress': progress})
+    return runs
+
+
+def nice_range(values, step):
+    return math.floor(min(values) / step) * step, math.ceil(max(values) / step) * step
+
+
+def line_chart(runs, metric, percent, title):
+    """Development metric over training, one line per run, on a shared update axis."""
+    width, height, left, right, top, bottom = 440, 250, 48, 14, 14, 36
+    series = [(run, [(update, dev[metric]) for update, dev in run['dev']]) for run in runs]
+    values = [value for _, points in series for _, value in points]
+    if not values:
+        return ''
+    step = .05 if percent else .1
+    low, high = nice_range(values, step)
+    while (high - low) / step > 6:
+        step *= 2
+        low, high = nice_range(values, step)
+    x = lambda update: left + update / TOTAL_UPDATES * (width - left - right)
+    y = lambda value: top + (high - value) / (high - low) * (height - top - bottom)
+    fmt = (lambda value: f'{value:.0%}') if percent else (lambda value: f'{value:.1f}')
+    parts = [f'<figure><figcaption>{escape(title)}</figcaption><svg viewBox="0 0 {width} {height}" role="img" aria-label="{escape(title)} by training update">']
+    ticks = round((high - low) / step)
+    for i in range(ticks + 1):
+        value = low + step * i
+        parts.append(f'<line class="grid" x1="{left}" x2="{width-right}" y1="{y(value):.1f}" y2="{y(value):.1f}"/>'
+                     f'<text x="{left-8}" y="{y(value)+4:.1f}" text-anchor="end">{fmt(value)}</text>')
+    for update in range(0, TOTAL_UPDATES, 2000):
+        parts.append(f'<text x="{x(update):.1f}" y="{height-16}" text-anchor="middle">{update:,}</text>')
+    parts.append(f'<text x="{(left+width-right)/2}" y="{height-1}" text-anchor="middle">Training update</text>')
+    for run, points in series:
+        if len(points) > 1:
+            parts.append(f'<polyline class="trace s-{run["key"]}" points="{" ".join(f"{x(u):.1f},{y(v):.1f}" for u, v in points)}"/>')
+        kept = run['kept'][0] if run['kept'] else None
+        for update, value in points:
+            label = f'{run["name"]} · update {update:,}: {value:.1%}' if percent else f'{run["name"]} · update {update:,}: {value:.3f}'
+            label += ' · kept checkpoint' if update == kept else ''
+            parts.append(f'<g><title>{escape(label)}</title><circle class="hit" cx="{x(update):.1f}" cy="{y(value):.1f}" r="9"/>'
+                         f'<circle class="dot s-{run["key"]}" cx="{x(update):.1f}" cy="{y(value):.1f}" r="{6 if update == kept else 3.5}"/></g>')
+    parts.append('</svg></figure>')
+    return ''.join(parts)
+
+
+def new_data_panel():
+    """Keep the different dataset separate from the matched old-corpus comparison."""
+    directory = ROOT / NEW_DATA_RUN
+    if not directory.exists():
+        return ''
+    status = read(f'{NEW_DATA_RUN}/experiment-status.json') if (directory / 'experiment-status.json').exists() else {}
+    phase = str(status.get('phase', status.get('stage', 'dataset and protocol preparation')))
+    state = str(status.get('status', 'preparing'))
+    observed = status.get('updated_at', status.get('completed_at', ''))
+    fast_directory = directory / 'fast-evaluation-003'
+    fast_active = (fast_directory / 'launch-attempt.json').exists()
+    if fast_active:
+        fast_status = read(f'{NEW_DATA_RUN}/fast-evaluation-003/status.json') if (fast_directory / 'status.json').exists() else {}
+        terminal = read(f'{NEW_DATA_RUN}/fast-evaluation-003/driver-exit.json') if (fast_directory / 'driver-exit.json').exists() else None
+        state = ('completed' if terminal.get('exit_code') == 0 else 'failed') if terminal else 'running'
+        if (fast_directory / 'service-watch-incident.json').exists() and not terminal:
+            state = 'failed'
+        phase = str(fast_status.get('phase', 'bounded checkpoint selection, then full benchmark'))
+        observed = fast_status.get('updated_at_utc', '')
+        retry_pointer = fast_directory / 'retry-active.json'
+        if retry_pointer.exists():
+            retry = read(f'{NEW_DATA_RUN}/fast-evaluation-003/retry-active.json')
+            retry_exit = (fast_directory / retry['driver_exit']).resolve()
+            if not retry_exit.is_relative_to(fast_directory.resolve()):
+                raise ValueError('Evaluation retry resolves outside its run directory')
+            terminal = json.loads(retry_exit.read_text()) if retry_exit.exists() else None
+            state = ('completed' if terminal.get('exit_code') == 0 else 'failed') if terminal else str(retry['status'])
+            if state == 'prepared':
+                phase = 'full benchmark handoff recovery; development selection complete'
+    body = (f'<p><strong>New-data continuation</strong> · saved state: {escape(state)} · {escape(phase)}</p>'
+            '<p>Continue the best last-block + linear-head model on reviewed documents, games, public training sources and old-data replay. '
+            'This uses a different development set from the comparison above.</p>')
+    if observed:
+        body += f'<p class="muted">Status observed {escape(str(observed))}. Refresh after the next report rebuild.</p>'
+    if status.get('message'):
+        if not fast_active:
+            body += f'<p>{escape(str(status["message"]))}</p>'
+    if fast_active:
+        body += ('<p>All 1,438 training updates are saved. The revised evaluation compares five checkpoints on the same '
+                 '128 development questions, then runs the full 17,874-question external suite on the selected checkpoint. '
+                 'Calibration uses 64 separate questions; the extra internal test is deferred. '
+                 'Selection on this small development panel is exploratory.</p>')
+        if (fast_directory / 'benchmark-report.json').exists():
+            body += '<p>' + link(f'{NEW_DATA_RUN}/fast-evaluation-003/benchmark-report.html', 'Full benchmark comparison — new data versus previous checkpoint') + '</p>'
+            body += '<p>' + link('runs/decision-model-comparison-2026-10-09.html', 'Comparison with other 4B decision models') + '</p>'
+        selection_path = fast_directory / 'development-selection.json'
+        if selection_path.exists():
+            selection = json.loads(selection_path.read_text())
+            rows = []
+            for update, result in sorted(selection['candidates'].items(), key=lambda item: int(item[0])):
+                metrics = result['metrics']
+                label = f'Update {update}' + (' (selected)' if int(update) == selection['selected_update'] else '')
+                rows.append((label, f'{metrics["soft_cross_entropy"]:.4f}', f'{metrics["argmax_agreement"]:.1%}'))
+            body += table(['Checkpoint', 'Development cross-entropy ↓', 'Top-choice agreement ↑'], rows,
+                          'Same 128-question development panel; these are not external benchmark scores')
+    if (directory / 'protocol.json').exists():
+        protocol = read(f'{NEW_DATA_RUN}/protocol.json')
+        body += (f'<p>{protocol["training_questions"]:,} training questions; {protocol["development_questions"]:,} development questions. '
+                 f'Two {protocol["pilot"]["updates"]:,}-update learning-rate pilots, then one {protocol["main"]["updates"]:,}-update epoch. '
+                 'Separate calibration and internal test follow checkpoint selection.</p>')
+    if (directory / 'pilot-choice.json').exists():
+        choice = read(f'{NEW_DATA_RUN}/pilot-choice.json')
+        body += f'<p>Development selected head learning rate: {choice["selected_head_learning_rate"]:g}. Last-block rate: 1e-5.</p>'
+    if (directory / 'full-context-smoke.json').exists():
+        smoke = read(f'{NEW_DATA_RUN}/full-context-smoke.json')
+        if smoke.get('backward_completed') and smoke.get('compact_checkpoint_reload_verified'):
+            body += (f'<p>GPU check passed on a complete {smoke["complete_input_tokens"]:,}-token input, including backward computation '
+                     f'and exact compact checkpoint restoration. Peak allocation: {smoke["peak_device_allocated_gib"]:.1f} GiB.</p>')
+    if (directory / 'training-status.json').exists():
+        progress = read(f'{NEW_DATA_RUN}/training-status.json')
+        body += (f'<p>Saved training progress: {escape(str(progress.get("phase", progress.get("status", "unknown"))))}; '
+                 f'{progress.get("global_update", 0):,} optimizer updates, {progress.get("questions_seen", 0):,} training questions. '
+                 f'<span class="muted">Observed {escape(str(progress.get("updated_at", "")))}.</span></p>')
+    main_directory = directory / 'main'
+    if (directory / 'resolved-main.json').exists():
+        resolved = read(f'{NEW_DATA_RUN}/resolved-main.json')
+        main_directory = (ROOT / resolved['output']).resolve()
+        if not main_directory.is_relative_to(directory.resolve()):
+            raise ValueError('New-data output resolves outside its run directory')
+    main_relative = main_directory.relative_to(ROOT).as_posix()
+    if (main_directory / 'report.json').exists():
+        report = read(f'{main_relative}/report.json')
+        body += (f'<p>Main training: {escape(report["status"])}. Selected update {report["best_update"]:,}; '
+                 f'development cross-entropy {report["best_dev_soft_cross_entropy"]:.4f}.</p>')
+    test_relative = f'{main_relative}/calibration-evaluation/final-test.json'
+    if (ROOT / test_relative).exists():
+        result = read(test_relative)
+        cohorts = result['cohort_metrics']
+        comparison = []
+        for key, label in [('fresh', 'Fresh internal test'), ('original_replay', 'Historical internal test')]:
+            cohort = cohorts[key]
+            before, after = cohort['uncalibrated'], cohort['calibrated']
+            comparison.append((label, f'{cohort["questions"]:,}',
+                               f'{before["soft_target_cross_entropy_nats"]:.4f} → {after["soft_target_cross_entropy_nats"]:.4f}',
+                               f'{before["categorical_brier_sum"]:.4f} → {after["categorical_brier_sum"]:.4f}'))
+        body += table(['Test cohort', 'Questions', 'Cross-entropy ↓', 'Brier ↓'], comparison,
+                      'Before → after scalar temperature calibration; same selected checkpoint and test inference')
+        body += '<p class="muted">The historical internal test has been reused. Fresh internal questions are separate from calibration and development.</p>'
+    if (directory / 'benchmark-report.json').exists():
+        external = read(f'{NEW_DATA_RUN}/benchmark-report.json')
+        aggregate_path = external['aggregate_path']
+        if not (ROOT / aggregate_path).resolve().is_relative_to((ROOT / BENCHMARK_ROOT).resolve()):
+            raise ValueError('New-data benchmark aggregate resolves outside evaluation results')
+        aggregate = read(aggregate_path)
+        if SOURCES[aggregate_path] != external['aggregate_sha256'] or aggregate['candidate_results']['last-block'] != external['metrics']:
+            raise ValueError('New-data benchmark aggregate differs from its report binding')
+        overall = external['metrics']['overall']
+        body += (f'<p>Exploratory external accuracy: <strong>{overall["accuracy"]:.2%}</strong> '
+                 f'on {overall["examples"]:,} items. Prior last-block model: 49.14%. '
+                 'The suite has been reused; the new run also changes the training data and schedule.</p>')
+    links = [(f'{NEW_DATA_RUN}/protocol.json', 'Frozen plan'), (f'{NEW_DATA_RUN}/pilot-choice.json', 'Pilot comparison'),
+             (f'{main_relative}/curves.html', 'New-data learning curves'), (test_relative, 'Internal test and calibration'),
+             (f'{NEW_DATA_RUN}/benchmark-report.json', 'Exploratory external evaluation'), (f'{NEW_DATA_RUN}/experiment-status.json', 'Saved execution status'),
+             (f'{NEW_DATA_RUN}/training-status.json', 'Latest training progress')]
+    body += '<p>' + ' · '.join(link(path, title) for path, title in links if (ROOT / path).exists()) + '</p>'
+    return f'<section class="surface">{body}</section>'
+
+
+def build_dashboard():
+    """One screen: what each run is, how they compare on loss and accuracy, and what is running."""
+    original = read(BENCHMARKS['original'])['overall']
+    runs = dashboard_runs()
+    for run in runs:
+        run['shown'] = run['kept'][1] if run['kept'] else (run['dev'][-1][1] if run['dev'] else None)
+
+    def bar_cell(value, role):
+        if value is None:
+            return '<td class="muted">—</td>'
+        return (f'<td><span class="meter"><span class="fill s-{role}" style="width:{value:.1%}"></span></span>'
+                f'<span class="num">{value:.1%}</span></td>')
+
+    def number_cell(value, best):
+        if value is None:
+            return '<td class="muted">—</td>'
+        strong = ' class="best"' if best is not None and math.isclose(value, best) else ''
+        return f'<td><span{strong}>{value:.3f}</span></td>'
+
+    best_dev_loss = min((run['shown']['soft_cross_entropy'] for run in runs if run['kept']), default=None)
+    best_outside_loss = min((run['outside']['negative_log_likelihood'] for run in runs if run['outside']), default=None)
+    rows = ''
+    for run in runs:
+        dev, outside = run['shown'], run['outside']
+        if run['kept']:
+            dev_note = f'Kept checkpoint: update {run["kept"][0]:,}.'
+        elif run['dev']:
+            dev_note = f'Training · latest check at update {run["dev"][-1][0]:,} of {TOTAL_UPDATES:,}.'
+        else:
+            dev_note = 'Training · first development check after update 512.'
+        rows += (f'<tr><th scope="row"><span class="key s-{run["key"]}"></span><strong>{escape(run["name"])}</strong>'
+                 f'<small>{escape(run["description"])} {escape(dev_note)}</small></th>'
+                 + bar_cell(dev and dev['hard_accuracy'], run['key'])
+                 + number_cell(dev and dev['soft_cross_entropy'], best_dev_loss)
+                 + bar_cell(outside and outside['accuracy'], run['key'])
+                 + number_cell(outside and outside['negative_log_likelihood'], best_outside_loss) + '</tr>')
+    rows += ('<tr><th scope="row"><span class="key s-original"></span><strong>Original Qwen</strong>'
+             '<small>Untouched. Answers through its own text output, not a trained answer layer, so its loss is not comparable.</small></th>'
+             '<td class="muted">—</td><td class="muted">—</td>' + bar_cell(original['accuracy'], 'original')
+             + f'<td class="muted">{original["negative_log_likelihood"]:.3f}</td></tr>')
+
+    scored = [run for run in runs if run['kept'] and run['outside']]
+    if len(scored) > 1:
+        dev_best = max(scored, key=lambda run: run['kept'][1]['hard_accuracy'])
+        out_best = max(scored, key=lambda run: run['outside']['accuracy'])
+        out_worst = min(scored, key=lambda run: run['outside']['accuracy'])
+        finding = (f'<strong>{escape(dev_best["name"])}</strong> learned our own questions best '
+                   f'({dev_best["kept"][1]["hard_accuracy"]:.1%} correct)')
+        if dev_best is out_worst:
+            finding += f', but did worst on outside questions ({dev_best["outside"]["accuracy"]:.1%}).'
+        else:
+            finding += f' and scored {dev_best["outside"]["accuracy"]:.1%} on outside questions.'
+        if out_best is not dev_best:
+            finding += (f' <strong>{escape(out_best["name"])}</strong> did best outside '
+                        f'({out_best["outside"]["accuracy"]:.1%}).')
+        finding += f' The untouched original still scores highest outside ({original["accuracy"]:.1%}).'
+    else:
+        finding = f'The untouched original scores {original["accuracy"]:.1%} on outside questions.'
+
+    training = []
+    for run in runs:
+        progress = run['progress']
+        if not run['kept'] and progress.get('status') == 'running':
+            text = f'{run["name"]} is training: update {progress.get("global_update", 0):,} of {TOTAL_UPDATES:,}'
+            if progress.get('estimated_training_completion_at'):
+                text += f', estimated to finish {progress["estimated_training_completion_at"][:16]}Z'
+            training.append(text + '.')
+    running = ' '.join(training) if training else 'The old-corpus experiments are complete.'
+    charts = line_chart(runs, 'soft_cross_entropy', False, 'Development loss · lower is better') + \
+        line_chart(runs, 'hard_accuracy', True, 'Development accuracy · higher is better')
+    style = (
+        '*{box-sizing:border-box}body{margin:0;background:var(--canvas);color:var(--ink);font:16px/1.55 system-ui,sans-serif}'
+        'main{max-width:1000px;margin:auto;padding:40px 24px}p{margin:12px 0}.muted,small{color:var(--muted)}a{color:var(--blue)}'
+        '.finding{font-size:21px;line-height:1.45;margin:8px 0 26px;max-width:880px}'
+        '.surface{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:22px 24px;margin:20px 0}'
+        '.scroll{overflow-x:auto}table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}'
+        'th,td{text-align:left;vertical-align:top;padding:12px 10px;border-bottom:1px solid var(--line)}tbody tr:last-child>*{border-bottom:0}'
+        'thead th{font-size:13px;font-weight:600;color:var(--muted);padding-top:4px}thead tr:first-child th{padding-bottom:0;color:var(--ink)}'
+        'tbody th{font-weight:400;min-width:260px}tbody th strong{font-weight:600}tbody th small{display:block;font-size:13px;line-height:1.4;margin-top:2px}'
+        '.group{border-left:1px solid var(--line)}td:nth-child(2),td:nth-child(4){border-left:1px solid var(--line)}'
+        '.key{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;background:var(--series)}'
+        '.meter{display:block;width:110px;height:8px;background:var(--canvas);border-radius:4px;margin:8px 0 4px}'
+        '.fill{display:block;height:100%;border-radius:0 4px 4px 0;background:var(--series)}.num{font-weight:600}.best{font-weight:700}'
+        '.charts{display:grid;grid-template-columns:1fr 1fr;gap:24px}figure{margin:0}figcaption{font-weight:600;margin-bottom:6px}'
+        'svg{width:100%;height:auto;display:block}svg text{font:11px system-ui;fill:var(--muted)}.grid{stroke:var(--line);stroke-width:1}'
+        '.trace{fill:none;stroke:var(--series);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}'
+        '.dot{fill:var(--series);stroke:var(--paper);stroke-width:2}.hit{fill:transparent}'
+        + ''.join(f'.s-{key}{{--series:var(--{key})}}' for key in ('head-only', 'last-block', 'option-attention', 'full', 'original'))
+        + '@media(max-width:700px){main{padding:24px 14px}.charts{grid-template-columns:1fr}tbody th{min-width:170px}tbody th small{display:none}.meter{width:64px}th,td{padding:10px 6px}.finding{font-size:18px}.surface{padding:16px}}'
+    )
+    observed = datetime.now(timezone.utc).isoformat(timespec='seconds')
+    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Horscht · dashboard</title><style>:root{{{theme_css()}}}{style}</style></head><body><main>
+<p class="muted">Horscht · {observed[:10]}</p>
+<p class="finding">{finding}</p>
+{new_data_panel()}
+<section class="surface"><div class="scroll"><table>
+<thead><tr><th></th><th colspan="2" class="group">Our development questions</th><th colspan="2" class="group">Outside questions</th></tr>
+<tr><th scope="col">Run</th><th scope="col" class="group">Accuracy ↑</th><th scope="col">Loss ↓</th><th scope="col" class="group">Accuracy ↑</th><th scope="col">Loss ↓</th></tr></thead>
+<tbody>{rows}</tbody></table></div>
+<p class="muted">All runs trained on the same 128,263 questions with the same settings, for one pass. Development: 7,202 held-back questions from our own data (accuracy uses the 2,740 with one right answer). Outside: 17,874 multiple-choice questions from MMLU-Pro, Belebele and BBH, never trained on. Loss is cross-entropy; compare it down a column, not across, because the two question sets differ. We have looked at the outside questions before, so treat them as a guide, not proof.</p></section>
+<section class="surface"><div class="charts">{charts}</div>
+<p class="muted">Each dot is one development check, every 512 updates. The large dot is the checkpoint we kept (lowest development loss); that checkpoint is the one scored on outside questions.</p></section>
+<p>{escape(running)} Still open: is the original ahead because of what it knows, or because of how it answers?</p>
+<p><a href="{RECORD.name}">Full record: every number, check, decision and earlier experiment →</a></p>
+<p class="muted">Generated {observed}.</p>
+</main></body></html>"""
+
+
 def build():
     head_state, head_meaning, head_gpu, head_body = current_head_state()
     last_state, last_meaning, last_gpu, last_body = current_last_block_state()
+    attention_state, attention_meaning, attention_gpu, attention_body = current_attention_state()
     observed = datetime.now(timezone.utc).isoformat(timespec='seconds')
     history, training, status, config, resume = load_training()
     for path in ('run-config.json', 'recovery-2026-10-04/full/report.json',
@@ -343,8 +814,13 @@ def build():
     arms = matched_arms()
     if arms and arms['full'] != current:
         raise ValueError('Matched FULL metrics differ from the current FULL aggregate')
-    matched = [('Head only · backbone frozen', arms['head-only']), ('Last block + head', arms['last-block']),
-               ('Full backbone + head', current)] if arms else [('Full backbone + head', current)]
+    matched_labels = [('head-only', 'Head only · backbone frozen'),
+                      ('last-block', 'Last block + head'),
+                      ('option-attention', 'Option attention + final block'),
+                      ('full', 'Full backbone + head')]
+    matched = [(label, arms[key]) for key, label in matched_labels if key in arms]
+    if not any(key == 'full' for key, _ in matched_labels if key in arms):
+        matched.append(('Full backbone + head', current))
     references = [('Original Qwen · native LM head', original), ('Earlier full tune', earlier),
                   ('Earlier frozen head', frozen)]
     groups = [('Same current corpus · trainable scope grows downward', [('matched', l, m['overall']) for l, m in matched]),
@@ -360,10 +836,10 @@ def build():
                        *[f'{m["by_source_slice"][key]["accuracy"]:.2%}' for m in slice_systems]))
     best_arm = max(matched, key=lambda item: item[1]['overall']['accuracy'])
     if arms:
-        lead = (f'On the same training corpus, training less of the backbone scored higher on the reused external suite: '
-                f'head only {arms["head-only"]["overall"]["accuracy"]:.2%}, last block {arms["last-block"]["overall"]["accuracy"]:.2%}, '
-                f'full backbone {current["overall"]["accuracy"]:.2%}. Original Qwen still leads at {original["overall"]["accuracy"]:.2%}, '
-                f'with a different prompt and readout. The suite is reused, so this is exploratory evidence.')
+        scores = ', '.join(f'{label.lower()} {metrics["overall"]["accuracy"]:.2%}' for label, metrics in matched)
+        lead = (f'Matched runs on the same frozen corpus scored {scores} on the reused external suite. '
+                f'Original Qwen scored {original["overall"]["accuracy"]:.2%} with a different prompt and readout. '
+                f'The suite is reused, so this is exploratory evidence.')
     else:
         lead = (f'The current full tune scored {current["overall"]["accuracy"]:.2%} on the reused external suite, below original Qwen '
                 f'({original["overall"]["accuracy"]:.2%}) and the earlier full tune ({earlier["overall"]["accuracy"]:.2%}).')
@@ -392,7 +868,7 @@ def build():
         count = sum(v for k,v in choices.items() if lo <= k <= hi)
         choice_rows.append((label, f'{count:,}', f'{count/splits["train"]:.2%}'))
     overview = f'''
-<header><p class="muted">Horscht · project record · 2026-10-04</p><h1>What we built, what we measured, and what is still open.</h1>
+<header><p class="muted"><a href="project-record-2026-10-04.html">← Dashboard</a> · Horscht · full project record · 2026-10-04</p><h1>What we built, what we measured, and what is still open.</h1>
 <p class="lead">{escape(lead)}</p>
 <p class="muted">Snapshot generated {observed}. This is a saved record, not a live activity dashboard. Discussion summaries consolidate the saved project evidence and the coordinating conversation; they are not a verbatim transcript.</p></header>
 <nav aria-label="Record contents"><a href="#status">Status</a><a href="#diagnostic">Attribution</a><a href="#corpus">Training data</a><a href="#discussion">Discussion and decisions</a><a href="#history">Earlier work</a><a href="#sources">Sources</a></nav>
@@ -416,11 +892,12 @@ def build():
 ('Synthetic attribution diagnostic', '<span class="completed">Completed</span>', 'Eight probes, four systems; about 97 seconds.'),
 ('New full-dataset frozen-backbone experiment', escape(head_state), escape(head_meaning)),
 ('Matched last-block experiment', escape(last_state), escape(last_meaning)),
+('Final option-attention + last-block arm', escape(attention_state), escape(attention_meaning)),
 ('Choice-count and length comparison', 'Partial · not running', 'Original-model strata available; matched trained-model diagnostics pending.'),
 ('New game and document batches', 'Generated · not trained', 'Separate future-data artifacts; absent from the completed frozen run.'),
-('GPU / background owners', escape(last_gpu or head_gpu), 'Durable training and completion jobs publish saved status.')], 'Work and status')}
+('GPU / background owners', escape(attention_gpu if attention_gpu.startswith('GPU owned') else last_gpu or head_gpu), 'Durable training and completion jobs publish saved status.')], 'Work and status')}
 <p>The earlier frozen-head control already exists. It used an earlier dataset and is <strong>not</strong> the newly discussed head-only experiment on the full current corpus.</p>
-{detail('Frozen-backbone run: evidence and receipts', head_body)}{detail('Last-block run: evidence and receipts', last_body)}</section>
+{detail('Frozen-backbone run: evidence and receipts', head_body)}{detail('Last-block run: evidence and receipts', last_body)}{detail('Option-attention run: evidence and receipts', attention_body)}</section>
 <section class="surface"><p><strong>What the current training run actually completed</strong></p>
 <p>Original pinned Qwen3-4B plus a fresh random decision head; all backbone weights were trainable. It consumed 128,263 training questions and 37,756,818 input tokens in one epoch. The original four-epoch plan was interrupted by user-manager shutdown. Verified recovery resumed optimizer and RNG state from update 7,865 in a separate output directory and was capped at one epoch for assessment.</p>
 {table(['Development metric','Initial · 0','Selected · 4,608','Final · 8,017'], internal_rows, 'Internal development: selection evidence, not an independent benchmark')}
@@ -537,29 +1014,40 @@ def build():
 {detail('2026-10-05 · matched final-block arm', f'''
 <p>The user authorized the final transformer block plus a fresh 265-way head on the original pinned Qwen3-4B. The embedding, preceding 35 blocks and final backbone normalization remain frozen. The arm uses the same immutable dataset, seed, fresh head initialization, deterministic epoch plan and one-epoch exposure as current FULL and current head-only. The last-block learning rate is the previously used full-backbone rate, 0.00001; no hyperparameter search or new data was introduced.</p>
 <p>Saved state at this record: {escape(last_state)}. The durable completion job verifies the selected development checkpoint, exact matched exposure and unchanged frozen weights before serial evaluation on the same 17,874-item suite. That evaluation is exploratory reuse, with no external checkpoint selection or tuning.</p>''')}
+{detail('2026-10-06 · final old-corpus architecture test', f'''
+<p>The option-attention arm pairs a 256-wide option-conditioned attention head with Qwen’s final transformer block (block 35). It keeps the embedding, preceding 35 blocks and final backbone normalization frozen. The authorized comparison uses the same frozen training corpus, prompt, loss and one-epoch budget as the matched arms.</p>
+<p>Saved state at this record: {escape(attention_state)}. This is the last planned external test for the old training corpus. After its aggregate-only evaluation, further training and external comparison wait for newly admitted game and document data. The observed suite has been reused and remains exploratory.</p>''')}
 </section>
 <section class="surface"><p><strong>What remains unresolved</strong></p>
 <p>We do not yet know how much of the external gap comes from head/readout alignment, prompts, training distribution, choice cardinality, model adaptation, forgetting, or the differing old/current cohorts. We also do not know whether newly generated games/documents improve non-game transfer, long-context integration, or multilingual reliability: they have not been trained or measured in this run.</p>
-<p>The matched fresh-head control and the final-block arm provide controlled evidence with the same current corpus. Internal held-out evaluation under a declared boundary and a separately designed frozen system test remain future evidence. Keep the observed external suite exploratory, preserve raw artifacts, and change one major experimental difference at a time. This follows the Pragmatic Programmer principle of deliberate experiments and avoiding accidental complexity.</p></section>
+<p>The matched fresh-head, final-block and option-attention arms provide controlled evidence with the same current corpus. Further training and external evaluation on this old corpus stop after the final architecture test. Internal held-out evaluation under a declared boundary and a separately designed frozen system test remain future evidence. Keep the observed external suite exploratory, preserve raw artifacts, and change one major experimental difference at a time. This follows the Pragmatic Programmer principle of deliberate experiments and avoiding accidental complexity.</p></section>
 '''
     source_rows = [(link(path,path),f'<code>{digest}</code>') for path,digest in sorted(SOURCES.items()) if not path.endswith('rows.jsonl')]
     source_section = '<section class="surface" id="sources"><p><strong>Evidence and reproducibility</strong></p><p>The builder reads only explicitly named external aggregate files. All core tables and curves are embedded; no CDN, external script or network dependency is needed to read this record. Linked detailed reports and source files are optional drill-downs and require the repository to remain beside this file.</p>'
     source_section += detail('Exact source files and SHA-256 bindings', table(['Source artifact','SHA-256'],source_rows,'Input bindings at record generation') + f'<p>Frozen corpus rows SHA-256: <code>{SOURCES["data/training_snapshots/2026-10-01-v1/rows.jsonl"]}</code>. Read internally for aggregate train accounting; corpus text is not embedded.</p><p>The current training history merge/selection/reload validation and the benchmark count/weighted-metric/suite-binding validations run before rendering. Static conversation summaries distinguish observations, interpretation, proposals and implementation; they do not authorize jobs.</p>')
     source_section += f'<p>{link("build_project_record.py","Rebuild script")} · {link(".cursor/rules/blind-benchmarks.mdc","Blind benchmark rule")} · {link("AGENTS.md","Project coordination instructions")}</p></section>'
-    theme = ''.join(f'--{key}:{value};' for key,value in PALETTE.items())
-    theme += ''.join(f'--{role}:var(--{token});' for role,token in PRESENTATION.items())
+    theme = theme_css()
     style = '''
 *{box-sizing:border-box}body{margin:0;background:var(--canvas);color:var(--ink);font:16px/1.6 system-ui,sans-serif}main{max-width:1120px;margin:auto;padding:36px 26px}h1{font-size:34px;line-height:1.2;letter-spacing:-.025em;max-width:880px;margin:12px 0 20px}p{margin:12px 0}.lead{font-size:19px;max-width:970px}.muted,small{color:var(--muted)}nav{display:flex;gap:10px 24px;flex-wrap:wrap;margin:26px 0}a{color:var(--blue);text-underline-offset:3px}a:focus-visible,summary:focus-visible,button:focus-visible{outline:3px solid var(--blue);outline-offset:4px}.surface{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:24px;margin:22px 0}.surface>p:first-child{font-size:19px;margin-top:0}details{border-top:1px solid var(--line);padding:16px 0}summary{cursor:pointer;font-weight:600;padding:2px 0}.detail-body{padding:8px 0 0}details:last-child{padding-bottom:0}.scroll{overflow-x:auto;margin:20px 0}table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:14px}caption{text-align:left;color:var(--muted);padding-bottom:8px;font-size:13px}td,th{text-align:left;border-bottom:1px solid var(--line);padding:12px 10px;vertical-align:top}thead th{color:var(--muted);font-size:13px}tbody th{font-weight:500}td{min-width:76px}code{font-size:12px;overflow-wrap:anywhere}.completed{color:var(--completed);font-weight:650}.proposed{color:var(--proposed);font-weight:650}svg{width:100%;height:auto;display:block;margin:18px 0}svg text{font:15px system-ui;fill:var(--muted)}svg .label,svg .value{fill:var(--ink)}svg .tick{font-size:13px}svg .group{font-size:13px;font-weight:600}.hit{fill:transparent}.row:hover .hit{fill:var(--canvas)}.bar.matched{fill:var(--matched)}.bar.reference{fill:var(--reference)}.grid{stroke:var(--line);stroke-width:1}.trace{fill:none;stroke-width:2.5;stroke:var(--development)}.point{fill:var(--development)}.marker{stroke-width:1.5;stroke-dasharray:5 4}.marker.selected{stroke:var(--selected)}.marker.recovery{stroke:var(--recovery)}button{font:inherit;border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:6px;padding:7px 12px;cursor:pointer}.toolbar{display:flex;gap:10px;margin-top:20px}footer{color:var(--muted);font-size:13px;margin:24px 0}@media(max-width:650px){main{padding:20px 14px}h1{font-size:28px}.lead{font-size:17px}.surface{padding:17px}td,th{padding:10px 8px}table{min-width:530px}nav{gap:8px 18px}svg text{font-size:16px}}@media print{body{background:var(--paper)}main{max-width:none;padding:0}.surface{border-radius:0;break-inside:avoid}.toolbar,nav{display:none}summary{font-size:18px}a{color:var(--ink)}.scroll{overflow:visible}table{font-size:11px}footer{font-size:10px}}
 '''
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Horscht · consolidated project record · 2026-10-04</title><style>:root{{{theme}}}{style}</style></head><body><main>{overview}{extra}{source_section}<div class="toolbar" hidden id="controls"><button id="expand">Expand all details</button><button id="collapse">Collapse all details</button><button id="print">Print / save PDF</button></div><footer>Saved project record · {observed} · All core results embedded; historical artifacts preserved.</footer></main><script>document.getElementById('controls').hidden=false;document.getElementById('expand').onclick=()=>document.querySelectorAll('details').forEach(d=>d.open=true);document.getElementById('collapse').onclick=()=>document.querySelectorAll('details').forEach(d=>d.open=false);document.getElementById('print').onclick=()=>{{document.querySelectorAll('details').forEach(d=>d.open=true);window.print()}};</script></body></html>'''
 
 
+def write(path, content):
+    temporary = path.with_suffix('.html.tmp')
+    temporary.write_text(content)
+    temporary.replace(path)
+    print(path)
+
+
 def main():
-    output = build()
-    temporary = OUTPUT.with_suffix('.html.tmp')
-    temporary.write_text(output)
-    temporary.replace(OUTPUT)
-    print(OUTPUT)
+    if (ROOT / NEW_DATA_RUN / 'fast-evaluation-003/benchmark-report.json').exists():
+        from build_benchmark_report import build as build_benchmark
+        build_benchmark()
+        from build_peer_comparison_report import build as build_peers
+        build_peers()
+    write(RECORD, build().replace('<section class="surface" id="status">', new_data_panel() + '<section class="surface" id="status">', 1))
+    write(DASHBOARD, build_dashboard())
 
 
 if __name__ == '__main__':

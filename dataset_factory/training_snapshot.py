@@ -18,7 +18,7 @@ import tempfile
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from dataset_factory import probability_v2, progress
 
@@ -791,7 +791,8 @@ def build_snapshot(
             shutil.rmtree(staging)
 
 
-def permute_choices(row: Mapping[str, Any], seed: int | str) -> dict[str, Any]:
+def permute_choices(row: Mapping[str, Any], seed: int | str, *,
+                    validator: Callable[[dict[str, Any]], list[str]] | None = None) -> dict[str, Any]:
     """Return a copy with every choice-aligned target/evidence field permuted.
 
     The supplied seed is combined with the stable row ID so each item gets a
@@ -801,7 +802,8 @@ def permute_choices(row: Mapping[str, Any], seed: int | str) -> dict[str, Any]:
     if not isinstance(row, Mapping):
         raise SnapshotError("row must be a mapping")
     copied = copy.deepcopy(dict(row))
-    errors = probability_v2.classify_row(copied)[1]
+    validate = validator or (lambda value: probability_v2.classify_row(value)[1])
+    errors = validate(copied)
     if errors:
         raise SnapshotError("cannot permute an invalid training row: " + "; ".join(errors[:3]))
     options = copied.get("options")
@@ -848,7 +850,7 @@ def permute_choices(row: Mapping[str, Any], seed: int | str) -> dict[str, Any]:
     evidence = copied.get("distribution_evidence")
     if isinstance(evidence, dict):
         copied["distribution_evidence"] = reorder_evidence(evidence)
-    errors = probability_v2.classify_row(copied)[1]
+    errors = validate(copied)
     if errors:
         raise SnapshotError("permutation broke the training row contract: " + "; ".join(errors[:3]))
     return copied

@@ -1,0 +1,57 @@
+{
+  "schema_version": "horscht-final-block-replacement-v1",
+  "base_model": "Qwen/Qwen3-4B",
+  "base_revision": "1cfa9a7208912126459214e8b04321603b3df60c",
+  "hidden_size": 2560,
+  "capacity": 265,
+  "max_tokens": 40960,
+  "formatter": "plain-context-question-choices-v1",
+  "head_architecture": "last-token-linear-v1",
+  "parameter_dtype": "float32",
+  "inference_autocast_dtype": "bfloat16",
+  "overlay_parameter_names": [
+    "layers.35.input_layernorm.weight",
+    "layers.35.mlp.down_proj.weight",
+    "layers.35.mlp.gate_proj.weight",
+    "layers.35.mlp.up_proj.weight",
+    "layers.35.post_attention_layernorm.weight",
+    "layers.35.self_attn.k_norm.weight",
+    "layers.35.self_attn.k_proj.weight",
+    "layers.35.self_attn.o_proj.weight",
+    "layers.35.self_attn.q_norm.weight",
+    "layers.35.self_attn.q_proj.weight",
+    "layers.35.self_attn.v_proj.weight"
+  ],
+  "source_checkpoint_manifest_sha256": "0bb4234d8f364c8219e79cee2ca29d8ee41031584bd89dd38830a29a1dac08d7",
+  "source_backbone_sha256": "bbb926433522127d3840bf1ede9d0742323cdca549c15896a3d5ec9c83260f6c",
+  "source_head_sha256": "9a99bb924aae22d2d708052fbd6d6b8eecfc6516c4586bbfe41331bda8601f1a",
+  "warm_start_manifest_sha256": "13507ca2df5f5db3afcdbebf2a0c9cb9b9d99119f5435401910892eb9a1f05fb",
+  "frozen_upstream_identity": {
+    "verified_tensors": 387,
+    "exact_equal_after_upstream_float32_cast": true
+  },
+  "files": {
+    "decision.safetensors": {
+      "sha256": "939575a49ebebb24dd96b50c8a64deefb0066193f0649291b1766c61bff5e842",
+      "bytes": 406439524
+    },
+    "backbone_config.json": {
+      "sha256": "67af2ff3d48fd9604ba0232c7e3b72312fb3b2a41c52ecbd02c8ee0af8a81ffe",
+      "bytes": 1592
+    },
+    "tokenizer/chat_template.jinja": {
+      "sha256": "a55ee1b1660128b7098723e0abcd92caa0788061051c62d51cbe87d9cf1974d8",
+      "bytes": 4168
+    },
+    "tokenizer/tokenizer.json": {
+      "sha256": "8579e1ca7cc5d82a9e0202eed555529996f4ffe7f563c2979a0290cf3db452d3",
+      "bytes": 11422818
+    },
+    "tokenizer/tokenizer_config.json": {
+      "sha256": "c4f4c62b741ab2940841480f9942f378d7d3878d47c2babb862af7381c59b952",
+      "bytes": 693
+    }
+  },
+  "selected_update": 1080,
+  "default_inference_max_tokens": 32768
+}

@@ -49,17 +49,51 @@ def available_memory_bytes() -> int:
     raise RuntimeError("Cannot read MemAvailable for the training memory guard")
 
 
-def require_memory(additional_bytes: int, reserve_gib: float, device: str = "cpu") -> None:
-    available = available_memory_bytes()
+def memory_snapshot(device: str = "cpu") -> dict[str, int | None]:
+    host = available_memory_bytes()
+    snapshot = {"host_available_bytes": host, "driver_free_bytes": None, "device_total_bytes": None,
+                "device_allocated_bytes": 0, "device_reserved_bytes": 0,
+                "reusable_device_bytes": 0, "effective_available_bytes": host,
+                "process_cap_bytes": None, "process_cap_headroom_bytes": None}
     if device == "cuda":
-        available = min(available, torch.cuda.mem_get_info()[0])
+        free, total = torch.cuda.mem_get_info()
+        allocated, reserved = torch.cuda.memory_allocated(), torch.cuda.memory_reserved()
+        reusable = max(0, reserved - allocated)
+        cap = int(total * torch.cuda.get_per_process_memory_fraction())
+        # Cached allocations can serve the next GPU operation. On a shared-memory
+        # accelerator, crediting them to MemAvailable too would count RAM twice.
+        snapshot.update(driver_free_bytes=free, device_total_bytes=total,
+                        device_allocated_bytes=allocated, device_reserved_bytes=reserved,
+                        reusable_device_bytes=reusable, effective_available_bytes=min(host, free + reusable),
+                        process_cap_bytes=cap,
+                        process_cap_headroom_bytes=max(0, cap - allocated))
+    return snapshot
+
+
+class TrainingMemoryPressure(RuntimeError):
+    def __init__(self, snapshot, additional_bytes, reserve_bytes):
+        self.snapshot = snapshot
+        self.additional_bytes = additional_bytes
+        self.reserve_bytes = reserve_bytes
+        message = (f"Training memory guard: {snapshot['effective_available_bytes'] / 1024**3:.1f} GiB available; "
+                   f"need {additional_bytes / 1024**3:.1f} GiB additional plus {reserve_bytes / 1024**3:.1f} GiB reserve")
+        if snapshot.get("process_cap_headroom_bytes") is not None:
+            message += (f"; host free {snapshot['host_available_bytes'] / 1024**3:.1f} GiB"
+                        f"; driver free {snapshot['driver_free_bytes'] / 1024**3:.1f} GiB"
+                        f"; process-cap headroom {snapshot['process_cap_headroom_bytes'] / 1024**3:.1f} GiB")
+        super().__init__(message)
+
+
+def require_memory(additional_bytes: int, reserve_gib: float, device: str = "cpu"):
+    snapshot = memory_snapshot(device)
     reserve = int(reserve_gib * 1024**3)
-    if available < additional_bytes + reserve:
-        raise RuntimeError(
-            f"Training memory guard: {available / 1024**3:.1f} GiB available; "
-            f"need {additional_bytes / 1024**3:.1f} GiB additional plus "
-            f"{reserve_gib:.1f} GiB reserve"
-        )
+    cap_headroom = snapshot.get("process_cap_headroom_bytes")
+    driver_free = snapshot.get("driver_free_bytes")
+    if (snapshot["effective_available_bytes"] < additional_bytes + reserve
+            or driver_free is not None and driver_free < reserve
+            or cap_headroom is not None and cap_headroom < additional_bytes):
+        raise TrainingMemoryPressure(snapshot, additional_bytes, reserve)
+    return snapshot
 
 
 def peak_rss_gib() -> float:
@@ -100,10 +134,17 @@ def choice_order_risks(row: dict[str, Any]) -> list[str]:
 def ordered_row(row: dict[str, Any], seed: int, epoch: int) -> dict[str, Any]:
     from dataset_factory.training_snapshot import permute_choices
 
+    validator = None
+    if row.get("_new_dataset"):
+        from dataset_factory.new_dataset import validate_snapshot_row
+        validator = validate_snapshot_row
+        errors = validator(row)
+        if errors:
+            raise ValueError("Invalid source-aware snapshot row: " + "; ".join(errors[:3]))
     if choice_order_risks(row):
         import copy
         return copy.deepcopy(row)
-    return permute_choices(row, permutation_seed(seed, row["id"], epoch))
+    return permute_choices(row, permutation_seed(seed, row["id"], epoch), validator=validator)
 
 
 def prompt_cache_key(row: dict[str, Any]) -> str:
@@ -111,9 +152,10 @@ def prompt_cache_key(row: dict[str, Any]) -> str:
 
 
 def require_training_snapshot(snapshot: Path) -> None:
-    allowed = (ROOT / "data" / "training_snapshots").resolve()
-    if not snapshot.resolve().is_relative_to(allowed):
-        raise ValueError("Training accepts only frozen snapshots under data/training_snapshots")
+    roots = [(ROOT / "data" / name).resolve() for name in ("training_snapshots", "newtraining")]
+    allowed = next((root for root in roots if snapshot.resolve().is_relative_to(root)), None)
+    if allowed is None:
+        raise ValueError("Training accepts only frozen snapshots under data/training_snapshots or data/newtraining")
     for filename in ["manifest.json", "rows.jsonl", "splits.jsonl"]:
         if not (snapshot / filename).resolve().is_relative_to(allowed):
             raise ValueError("A training snapshot artifact resolves outside its allowlisted directory")
@@ -135,6 +177,8 @@ def cohort(row: dict[str, Any]) -> tuple[str, str, str]:
     count = len(row["options"])
     tier = "2-4" if count <= 4 else "5-16" if count <= 16 else "17-64" if count <= 64 else "65-265"
     source = row.get("distribution_source_kind", row.get("supervision_kind", "unknown"))
+    if row.get("_new_dataset", {}).get("source_id"):
+        source = f"{row['_new_dataset']['source_id']}:{source}"
     return source, tier, row.get("answerability_status") or "not_recorded"
 
 
@@ -378,6 +422,7 @@ def main() -> int:
     run.add_argument("--selection", type=Path, required=True)
     run.add_argument("--output", type=Path, required=True)
     run.add_argument("--arm", choices=["head", "full", "last-block"], required=True)
+    run.add_argument("--head-architecture", choices=["last-token-linear-v1", "option-context-attention-v1"], default="last-token-linear-v1")
     run.add_argument("--head-learning-rate", type=float, default=.001)
     run.add_argument("--backbone-learning-rate", type=float, default=.00001)
     run.add_argument("--accumulation", type=int, default=16)
@@ -385,6 +430,17 @@ def main() -> int:
     run.add_argument("--threads", type=int, default=8)
     run.add_argument("--reserve-gib", type=float, default=12)
     run.add_argument("--resume", type=Path)
+    run.add_argument("--warm-start", type=Path, help="Restore backbone/head weights with fresh optimizer, scheduler and RNG")
+    run.add_argument("--lr-schedule", choices=["constant", "warmup-cosine"], default="constant")
+    run.add_argument("--warmup-fraction", type=float, default=.03)
+    run.add_argument("--max-updates", type=int, default=0, help="Bound a development-only pilot; zero means all epochs")
+    run.add_argument("--fast-dev-questions", type=int, default=0)
+    run.add_argument("--full-dev-every", type=int, default=0, help="Full-development interval; zero uses eval-every")
+    run.add_argument("--order-consistency-questions", type=int, default=512)
+    run.add_argument("--compact-last-block-checkpoints", action="store_true")
+    run.add_argument("--resume-lifecycle-audit", type=Path)
+    run.add_argument("--defer-full-development", action="store_true",
+                     help="Pin the original selection checkpoints and score full development after all weight updates")
     run.add_argument("--device", choices=["cpu", "cuda"], default="cpu")
     run.add_argument("--attention-backend", choices=["auto", "flash"], default="auto")
     run.add_argument("--gpu-allocation-cap-gib", type=float, default=44)
@@ -424,6 +480,10 @@ def main() -> int:
         from scalable_training import prepare_full_selection
         return prepare_full_selection(args)
     if args.command in ["run-arm", "train-arm"]:
+        if args.resume and args.warm_start:
+            parser.error("Choose either an exact resume or a fresh-optimizer warm start")
+        if not 0 <= args.warmup_fraction < 1 or min(args.max_updates, args.fast_dev_questions, args.full_dev_every, args.order_consistency_questions) < 0:
+            parser.error("Warmup fraction must be in [0, 1); optional budgets must be nonnegative")
         if min(args.head_learning_rate, args.backbone_learning_rate, args.accumulation,
                args.eval_every, args.threads, args.reserve_gib, args.max_tokens, args.epochs,
                args.microbatch, args.max_batch_tokens, args.bucket_questions, args.checkpoint_every,

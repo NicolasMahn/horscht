@@ -1,0 +1,14 @@
+{
+  "LICENSE": "f7da10bb967ece54abc75233528032d6ea0a964f5f84483a0eaed8d8f40eae5b",
+  "LICENSES/Apache-2.0.txt": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e",
+  "NOTICE.md": "9639adbd29216f9d94c97908dcb461f2801c1a8f0999c694ba39c0747f794c22",
+  "README.md": "7d99710cf7043413801c4bcbd1dac5b57c3029efd4d51db9a284ae7e69d12d6f",
+  "data/continuation/train.parquet": "4a48d53e3cab26a5c35e9044ec85576e5da90190c20016c0cb5d0f9736ef3ad9",
+  "data/continuation/validation.parquet": "dfa3853d1969c8a97fcfe43e0c95cdabf2c23131b9cabcb332454e30a4959139",
+  "data/warmstart/train.parquet": "fd55dd6c488b5b1328caf971f8fb0d67a84244f0be93c15cb4dc98b0cf9f776d",
+  "data/warmstart/validation.parquet": "d0a4574c070c1969e7af54fec6fbb97ef68f465879091f566d9a1b80fe53ace7",
+  "document-attribution.jsonl": "51e251de36bad0a16a832f95a524b07474488ada2b9947f4d775b4c115eb5b10",
+  "manifest.json": "8b1967b4d965384c4001552933f9979ca63aaec09944b3b3c4bbdcacc79de723",
+  "public-source-manifest.json": "3e61ca9c237f83691c6f3e198b107554803f0a82f35046546b869dc9e78eec16",
+  "verification.json": "c673232f6aec888262f22e65657a368e53ca72f10d87246766469fc823176fa7"
+}

@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
-_SCRIPT = Path(__file__).resolve().parents[1] / "runs/document-breadth-2026-10-03/acquisition/acquire_science_public.py"
+_SCRIPT = Path(__file__).resolve().parents[1] / "scripts/acquire_science_public.py"
 _SPEC = importlib.util.spec_from_file_location("acquire_science_public", _SCRIPT)
 assert _SPEC and _SPEC.loader
 acquisition = importlib.util.module_from_spec(_SPEC)

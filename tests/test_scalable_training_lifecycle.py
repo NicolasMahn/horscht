@@ -74,7 +74,7 @@ class ToyBackbone(torch.nn.Module):
         self.harness = harness
         self.record_forward = record_forward
         self.embedding = torch.nn.Embedding(259, config.hidden_size)
-        self.projection = torch.nn.Linear(config.hidden_size, config.hidden_size)
+        self.layers = torch.nn.ModuleList([torch.nn.Linear(config.hidden_size, config.hidden_size)])
         self.dropout = torch.nn.Dropout(0.2)
         self.gradient_checkpointing_enabled = False
 
@@ -93,7 +93,7 @@ class ToyBackbone(torch.nn.Module):
                 "grad_enabled": torch.is_grad_enabled(),
             })
         hidden = self.embedding(input_ids)
-        hidden = self.dropout(torch.tanh(self.projection(hidden)))
+        hidden = self.dropout(torch.tanh(self.layers[-1](hidden)))
         return SimpleNamespace(last_hidden_state=hidden)
 
 
@@ -400,7 +400,7 @@ def test_scalable_arm_trains_two_epochs_and_resumes_without_touching_test_rows(
         real_run_epoch_updates = scalable_training.run_epoch_updates
         armed = {"value": True}
 
-        def interrupt_after_first_update(plan, cursor, *, stop, step, observe):
+        def interrupt_after_first_update(plan, cursor, *, stop, step, observe, before_step=None):
             def stop_after_observe(progress, metrics):
                 observe(progress, metrics)
                 if armed["value"]:
@@ -408,7 +408,7 @@ def test_scalable_arm_trains_two_epochs_and_resumes_without_touching_test_rows(
                     stop.request("toy update-boundary interruption")
 
             return real_run_epoch_updates(
-                plan, cursor, stop=stop, step=step, observe=stop_after_observe
+                plan, cursor, stop=stop, step=step, observe=stop_after_observe, before_step=before_step
             )
 
         monkeypatch.setattr(scalable_training, "run_epoch_updates", interrupt_after_first_update)
@@ -473,7 +473,119 @@ def test_scalable_arm_trains_two_epochs_and_resumes_without_touching_test_rows(
         assert plateau["training_questions"] == len(ids_by_split["train"])
         assert plateau["selected_checkpoint_reload_verified"] is True
         assert set(harness["model_rows"]).isdisjoint(test_ids)
+
+        from paired_training import TrainingMemoryPressure
+        memory_calls = {"count": 0}
+
+        def pressure_before_third_update(required_bytes, reserve_gib, device):
+            memory_calls["count"] += 1
+            if memory_calls["count"] == 4:
+                raise TrainingMemoryPressure({"effective_available_bytes": 0}, required_bytes, 0)
+
+        monkeypatch.setattr(scalable_training, "require_memory", pressure_before_third_update)
+        monkeypatch.setattr(scalable_training.StopController, "wait",
+                            lambda controller, seconds: controller.request("resource test interruption"))
+        pressure_args = _args(tmp_path, arm, snapshot, system_lock, selection, output_name=f"{arm}-pressure")
+        pressure_args.eval_every = pressure_args.checkpoint_every = 100
+        assert scalable_training.run_scalable_arm(pressure_args) == 130
+        pressure_report = json.loads((pressure_args.output / "report.json").read_text())
+        assert pressure_report["cursor"]["global_update"] == 2
+        assert pressure_report["training_questions"] == 2
+        pressure_checkpoint = _checkpoint_for_report(pressure_args.output, "last_checkpoint_relative")
+        pressure_metadata = json.loads((pressure_checkpoint / "checkpoint.json").read_text())
+        assert pressure_metadata["progress"]["reason"] == "memory pressure before next update"
+        assert pressure_metadata["progress"]["cursor"] == pressure_report["cursor"]
+        assert set(pressure_metadata["files"]) >= {"optimizer.pt", "torch_rng.pt", "python_rng.json"}
+
+        monkeypatch.setattr(scalable_training, "require_memory", check_memory)
+        pressure_resume = _args(tmp_path, arm, snapshot, system_lock, selection,
+                                output_name=f"{arm}-pressure-resumed", resume=pressure_checkpoint)
+        pressure_resume.eval_every = pressure_resume.checkpoint_every = 100
+        assert scalable_training.run_scalable_arm(pressure_resume) == 0
+        pressure_final = _checkpoint_for_report(pressure_resume.output, "last_checkpoint_relative")
+        for filename in ("head.pt", "optimizer.pt", "torch_rng.pt") + (("backbone.pt",) if arm == "full" else ()):
+            _assert_tree_equal(torch.load(final_checkpoint / filename, map_location="cpu", weights_only=True),
+                               torch.load(pressure_final / filename, map_location="cpu", weights_only=True))
+        assert json.loads((pressure_final / "python_rng.json").read_text()) == json.loads((final_checkpoint / "python_rng.json").read_text())
+
+        models_before = len(harness["models"])
+        monkeypatch.setattr(scalable_training, "require_memory",
+                            lambda required, reserve, device: (_ for _ in ()).throw(TrainingMemoryPressure({"effective_available_bytes": 0}, required, 0)))
+        startup_args = _args(tmp_path, arm, snapshot, system_lock, selection, output_name=f"{arm}-startup-wait")
+        assert scalable_training.run_scalable_arm(startup_args) == 130
+        assert len(harness["models"]) == models_before
+        startup_status = json.loads((startup_args.output / "status.json").read_text())
+        assert startup_status["status"] == "interrupted" and startup_status["global_update"] == 0
     finally:
         torch.set_rng_state(torch_state)
         random.setstate(python_state)
         torch.set_num_threads(previous_threads)
+
+
+def test_scheduled_pilot_selects_full_dev_only_and_can_continue_from_weights(tmp_path, monkeypatch):
+    harness = {'markers': {}, 'tokenizers': [], 'models': [], 'initial_model_states': [],
+               'model_rows': [], 'model_calls': []}
+    snapshot, lock, selection, ids, markers = _snapshot(tmp_path)
+    harness['markers'].update(markers)
+    _install_toy_transformers(monkeypatch, harness)
+    monkeypatch.setattr(scalable_training, 'require_training_snapshot', lambda path: None)
+    monkeypatch.setattr(scalable_training, 'require_memory', lambda *args: None)
+    monkeypatch.setattr(scalable_training, 'write_curves', lambda *args: None)
+    args = _args(tmp_path, 'last-block', snapshot, lock, selection, output_name='source')
+    args.max_updates = 3
+    args.lr_schedule = 'warmup-cosine'
+    args.warmup_fraction = .3
+    args.fast_dev_questions = 1
+    args.full_dev_every = 3
+    args.order_consistency_questions = 0
+    assert scalable_training.run_scalable_arm(args) == 0
+    history = json.loads((args.output / 'history.json').read_text())
+    assert [point['update'] for point in history if 'dev' in point] == [0, 3]
+    assert [point['update'] for point in history if 'fast_dev' in point] == [1, 2, 3]
+    report = json.loads((args.output / 'report.json').read_text())
+    assert report['cursor']['global_update'] == 3
+    assert report['best_update'] in (0, 3)
+    assert report['selected_checkpoint_reload_verified']
+    checkpoint = _checkpoint_for_report(args.output, 'last_checkpoint_relative')
+    assert (checkpoint / 'scheduler.pt').is_file()
+    continued = _args(tmp_path, 'last-block', snapshot, lock, selection, output_name='continued')
+    continued.compact_last_block_checkpoints = True
+    continued.warm_start = checkpoint
+    continued.max_updates = 3
+    continued.full_dev_every = 3
+    continued.lr_schedule = 'warmup-cosine'
+    continued.order_consistency_questions = 0
+    assert scalable_training.run_scalable_arm(continued) == 0
+    manifest = json.loads((continued.output / 'manifest.json').read_text())
+    metadata = json.loads((checkpoint / 'checkpoint.json').read_text())
+    source_head = scalable_training.DecisionHead(4)
+    source_head.load_state_dict(torch.load(checkpoint / 'head.pt', weights_only=True))
+    assert manifest['initial_head_state_sha256'] == scalable_training.model_state_sha256(source_head)
+    assert manifest['warm_start']['checkpoint_manifest_sha256'] == scalable_training.sha256(checkpoint / 'checkpoint.json')
+    continued_initial = next((continued.output / 'checkpoints').glob('update-00000000-*'))
+    assert torch.load(continued_initial / 'optimizer.pt', weights_only=True)['state'] == {}
+    assert json.loads((continued_initial / 'checkpoint.json').read_text())['progress']['cursor']['global_update'] == 0
+    assert set(harness['model_rows']).isdisjoint(ids['test'])
+    import copy
+    real_run_updates = scalable_training.run_epoch_updates
+    def interrupt_first(plan, cursor, *, stop, step, observe, before_step=None):
+        def observe_and_stop(progress, metrics):
+            observe(progress, metrics)
+            stop.request('continuation interruption')
+        return real_run_updates(plan, cursor, stop=stop, step=step, observe=observe_and_stop,
+                                before_step=before_step)
+    interrupted = copy.copy(continued)
+    interrupted.output = tmp_path / 'continued-interrupted'
+    monkeypatch.setattr(scalable_training, 'run_epoch_updates', interrupt_first)
+    assert scalable_training.run_scalable_arm(interrupted) == 130
+    monkeypatch.setattr(scalable_training, 'run_epoch_updates', real_run_updates)
+    resumed = copy.copy(continued)
+    resumed.output = tmp_path / 'continued-resumed'
+    resumed.warm_start = None
+    resumed.resume = _checkpoint_for_report(interrupted.output, 'last_checkpoint_relative')
+    assert scalable_training.run_scalable_arm(resumed) == 0
+    expected = _checkpoint_for_report(continued.output, 'last_checkpoint_relative')
+    actual = _checkpoint_for_report(resumed.output, 'last_checkpoint_relative')
+    for filename in ['head.pt','backbone.pt','optimizer.pt','scheduler.pt','torch_rng.pt']:
+        _assert_tree_equal(torch.load(expected / filename, weights_only=True),
+                           torch.load(actual / filename, weights_only=True))

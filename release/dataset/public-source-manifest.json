@@ -1,0 +1,87 @@
+{
+  "checkpoint_restriction": "Contains SciQ CC-BY-NC-3.0 training data: checkpoint redistribution/commercial use needs separate rights review; current run is private noncommercial research.",
+  "counts": {
+    "banking77": 10003,
+    "sciq": 10448,
+    "typed-decisions": 6000
+  },
+  "excluded_invalid_rows": {
+    "banking77": 0,
+    "sciq": 33,
+    "typed-decisions": 0
+  },
+  "invalid_rows": 0,
+  "policy": "Only source-native train artifacts downloaded. Raw supervision retained. SciQ is noncommercial; private research use only.",
+  "rejected_candidates": {
+    "MMLU and derivatives": "evaluation-only lineage",
+    "fancyzhx/ag_news": "unknown license"
+  },
+  "schema_version": "public-train-acquisition-v1",
+  "sources": [
+    {
+      "admitted_converted_rows": 6000,
+      "attribution": "LocalLLaMA/typed-decisions",
+      "converted_rows": 6000,
+      "converted_sha256": "f9f1ff2bcd7466c31f270a86c2cc3b0ca0afd86738f24b73aef0b6654ef36905",
+      "designation": "training_source_only; never an independent benchmark",
+      "excluded_invalid_rows": 0,
+      "license": "apache-2.0",
+      "license_evidence": {
+        "metadata_sha256": "6b7d1c4aa8356a0f574cf1b4065e67549894f74a33ea405aeea7c431a3b191e4",
+        "url": "https://huggingface.co/datasets/LocalLLaMA/typed-decisions/tree/e039ebffcc280174dd354227424fb2b249f191de"
+      },
+      "license_url": "https://www.apache.org/licenses/LICENSE-2.0",
+      "raw_rows": 1200,
+      "repository": "LocalLLaMA/typed-decisions",
+      "revision": "e039ebffcc280174dd354227424fb2b249f191de",
+      "sha256": "46a58d63edfd86e23229c78afe8b72307bb4ca9fb0e8df180cabb3c67ec9dcd5",
+      "source_id": "typed-decisions",
+      "source_url": "https://huggingface.co/datasets/LocalLLaMA/typed-decisions/tree/e039ebffcc280174dd354227424fb2b249f191de",
+      "split": "train"
+    },
+    {
+      "admitted_converted_rows": 10448,
+      "attribution": "allenai/sciq",
+      "converted_rows": 10481,
+      "converted_sha256": "0a4421b2bfa3c135df02beaa2f5392765cdb13def0539deef2d237b710005a5b",
+      "designation": "training_source_only; never an independent benchmark",
+      "excluded_invalid_rows": 33,
+      "license": "cc-by-nc-3.0",
+      "license_evidence": {
+        "metadata_sha256": "a6dffd55d77843a530e1aaddd4f87d28cad90055d2eb22b85ec6b11ea71a6dbf",
+        "url": "https://huggingface.co/datasets/allenai/sciq/tree/2c94ad3e1aafab77146f384e23536f97a4849815"
+      },
+      "license_url": "https://creativecommons.org/licenses/by-nc/3.0/",
+      "raw_rows": 11679,
+      "repository": "allenai/sciq",
+      "revision": "2c94ad3e1aafab77146f384e23536f97a4849815",
+      "sha256": "19644360954006d06e9ad3df07bddb34f8535c081b831d48f604603c713ac167",
+      "source_id": "sciq",
+      "source_url": "https://huggingface.co/datasets/allenai/sciq/tree/2c94ad3e1aafab77146f384e23536f97a4849815",
+      "split": "train"
+    },
+    {
+      "admitted_converted_rows": 10003,
+      "attribution": "PolyAI-LDN/task-specific-datasets",
+      "converted_rows": 10003,
+      "converted_sha256": "10e9411265ec96b9135abfe80fe10593cb7cba623596b8deb9b38add2df4eb29",
+      "designation": "training_source_only; never an independent benchmark",
+      "excluded_invalid_rows": 0,
+      "license": "cc-by-4.0",
+      "license_evidence": {
+        "metadata_sha256": "b30cb6508d197cd9fac0100ff00a03add158391ebf603706dc1b25cc60462073",
+        "url": "https://huggingface.co/datasets/PolyAI/banking77/tree/90d4e2ee5521c04fc1488f065b8b083658768c57"
+      },
+      "license_metadata_repository": "PolyAI/banking77",
+      "license_metadata_revision": "90d4e2ee5521c04fc1488f065b8b083658768c57",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "raw_rows": 10003,
+      "repository": "PolyAI-LDN/task-specific-datasets",
+      "revision": "57ec275d8078af65b7731c2a98be812d844a6d6b",
+      "sha256": "b06e26ac675513959a63135f11b94ea7786ed02da65db93a5650d8838cbc664b",
+      "source_id": "banking77",
+      "source_url": "https://raw.githubusercontent.com/PolyAI-LDN/task-specific-datasets/57ec275d8078af65b7731c2a98be812d844a6d6b/banking_data/train.csv",
+      "split": "train"
+    }
+  ]
+}

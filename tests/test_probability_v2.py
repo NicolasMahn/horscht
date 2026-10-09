@@ -284,6 +284,8 @@ def test_ten_row_pilot_is_valid_but_excluded_from_production_count():
         / "probability-v2-pilot.jsonl"
     )
 
+    if not pilot.is_file():
+        pytest.skip("Historical authored pilot fixture is not installed")
     summary = v2.summarize([pilot])
 
     assert summary["accepted_rows"] == 10

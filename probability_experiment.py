@@ -74,6 +74,13 @@ def targets_for_rows(rows: Sequence[dict[str, Any]]) -> tuple[Tensor, list[str],
         count = len(row["options"])
         if row["supervision_kind"] == "soft_distribution":
             distribution = [float(value) for value in row["target_distribution"]]
+            total = math.fsum(distribution)
+            if (len(distribution) != count or any(not math.isfinite(value) or value < 0 for value in distribution)
+                    or not math.isclose(total, 1., rel_tol=0., abs_tol=2e-6)):
+                raise ValueError("Soft targets must be valid distributions; only rounding drift up to 2e-6 is accepted")
+            # Public typed sources round probabilities to six decimals. Keep their
+            # stored values intact and remove that drift at the tensor boundary.
+            distribution = [value / total for value in distribution]
             source = row["distribution_source_kind"]
             hard_label = None
         elif row["supervision_kind"] == HARD_LABEL:

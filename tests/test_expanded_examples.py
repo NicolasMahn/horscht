@@ -12,8 +12,6 @@ from make_expanded_examples import make_expanded_examples
 def test_expanded_dataset_is_reproducible_and_nested_with_balanced_families(tmp_path):
     examples = make_expanded_examples()
     assert examples == make_expanded_examples()
-    committed = Path(__file__).resolve().parents[1] / "data" / "expanded.json"
-    assert json.loads(committed.read_text()) == examples
     path = tmp_path / "expanded.json"
     path.write_text(json.dumps(examples))
     assert load_examples(path) == examples
@@ -89,7 +87,7 @@ def test_subset_annotation_is_not_exposed_to_model():
 
 def test_nested_subset_preserves_original_training_examples_verbatim():
     root = Path(__file__).resolve().parents[1]
-    original = [example for example in json.loads((root / "data" / "smoke.json").read_text())
+    original = [example for example in make_examples()
                 if example["split"] == "train"]
     subset = [{key: value for key, value in example.items() if key != "train_subset_16"}
               for example in make_expanded_examples() if example["train_subset_16"]]

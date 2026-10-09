@@ -1,0 +1,87 @@
+{
+  "schema_version": "probability-v2-cardinality-policy-v1",
+  "choice_count_policy_version": "probability-v2-cardinality-v1",
+  "valid_choice_count_range": {
+    "minimum": 2,
+    "maximum": 265
+  },
+  "tier_weights": {
+    "low": 0.82,
+    "medium": 0.15,
+    "high": 0.03
+  },
+  "tier_counts": {
+    "low": [
+      2,
+      3,
+      4
+    ],
+    "medium": [
+      5,
+      6,
+      8,
+      10,
+      12,
+      16
+    ],
+    "high": [
+      17,
+      24,
+      32,
+      48,
+      64,
+      96,
+      128,
+      192,
+      265
+    ]
+  },
+  "medium_operations": [
+    "argument_evidence",
+    "document_navigation",
+    "experiment_design",
+    "game_sport_rules",
+    "policy_exceptions",
+    "procedure_recovery",
+    "taxonomy_outliers",
+    "tradeoff_optimization",
+    "workflow_debugging"
+  ],
+  "high_operations": [
+    "argument_evidence",
+    "document_navigation",
+    "game_sport_rules",
+    "policy_exceptions",
+    "procedure_recovery",
+    "taxonomy_outliers",
+    "tradeoff_optimization",
+    "workflow_debugging"
+  ],
+  "medium_input_structures": [
+    "claim_evidence_bundle",
+    "configuration_diff",
+    "inventory_ledger",
+    "map_route",
+    "measurement_sheet",
+    "multi_document_packet",
+    "pseudocode_trace",
+    "relationship_graph",
+    "rule_excerpt",
+    "schedule_calendar",
+    "state_transition_table",
+    "structured_record",
+    "table_or_grid",
+    "taxonomy_key",
+    "workflow_graph"
+  ],
+  "high_input_structures": [
+    "claim_evidence_bundle",
+    "inventory_ledger",
+    "multi_document_packet",
+    "state_transition_table",
+    "table_or_grid",
+    "taxonomy_key",
+    "workflow_graph"
+  ],
+  "allocation": "Sample a tier using the configured weights among tiers supported by the selected operation. Draw from the tier count set, then draw an input structure that supports that tier. Counts are deterministic from each assignment seed. High-tier values are discrete outcomes with decreasing emphasis on large lists; 265 is supported but not the default."
+}

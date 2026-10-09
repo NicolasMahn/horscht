@@ -1,0 +1,38 @@
+Horscht training data: source-specific licenses
+
+Copyright 2026 Nicolas Mahn, to the extent copyright subsists in original
+project contributions. Original synthetic question/game contributions and
+original selection, arrangement and documentation are licensed under Creative
+Commons Attribution 4.0 International:
+https://creativecommons.org/licenses/by/4.0/legalcode
+
+This grant does not replace or sublicense third-party rights. Every row names
+its source_license and contribution_license. Third-party text and datasets
+retain their source-specific licenses and notices in NOTICE.md,
+public-source-manifest.json and document-attribution.jsonl.
+
+For questions derived from CC-BY-SA-4.0 sources, Nicolas Mahn additionally
+licenses the original question/adaptation contributions under CC-BY-SA-4.0:
+https://creativecommons.org/licenses/by-sa/4.0/legalcode
+Recipients must retain the applicable attribution and share-alike obligations.
+
+SciQ source material and the associated transformed rows remain CC-BY-NC-3.0:
+https://creativecommons.org/licenses/by-nc/3.0/legalcode
+Nicolas Mahn's original contributions to those rows are also offered under
+CC-BY-NC-3.0. The noncommercial restriction is specific to those rows; it does
+not relicense other independently collected sources. A use involving SciQ
+material must satisfy those terms or obtain separate permission from its
+rights holder. Publication of this collection does not grant unrestricted
+commercial use of its complete mixture or models trained on it.
+
+Typed Decisions: Apache License 2.0
+https://www.apache.org/licenses/LICENSE-2.0
+Banking77: Creative Commons Attribution 4.0 International
+https://creativecommons.org/licenses/by/4.0/legalcode
+Document source licenses: CC-BY-2.0, CC-BY-3.0, CC-BY-4.0, CC-BY-SA-4.0,
+CC0-1.0 and Open Government Licence 3.0, as recorded per document.
+
+The source license URLs form part of each row's provenance and accompanying
+notices. No license grant is made for excluded artifacts, owner-local logs,
+source assets outside the exported text, or external evaluation material.
+Project packaging code is MIT-licensed separately in the source repository.

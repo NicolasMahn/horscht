@@ -95,6 +95,8 @@ def save_training_checkpoint(
     progress: dict[str, Any],
     manifest: dict[str, Any],
     include_backbone: bool = True,
+    backbone_parameter_names: list[str] | None = None,
+    base_checkpoint: str | Path | None = None,
 ) -> Path:
     """Write a complete checkpoint to a new directory and return its path."""
     destination = Path(output_dir)
@@ -107,12 +109,44 @@ def save_training_checkpoint(
     # Validate metadata before writing large model files.
     json.dumps(progress, allow_nan=False)
     json.dumps(manifest, allow_nan=False)
+    base_reference = None
+    if backbone_parameter_names is not None:
+        if not include_backbone or not backbone_parameter_names or base_checkpoint is None:
+            raise ValueError("Compact backbone checkpoints require trainable names and an immutable base checkpoint")
+        if len(set(backbone_parameter_names)) != len(backbone_parameter_names):
+            raise ValueError("Compact backbone parameter names must be unique")
+        base_path = Path(base_checkpoint)
+        if any(candidate.is_symlink() for candidate in [base_path, *base_path.parents]):
+            raise ValueError("Compact checkpoint bases cannot use symlink paths")
+        base = base_path.resolve()
+        base_manifest = base / CHECKPOINT_FILE
+        if not base_manifest.is_file() or base == destination.resolve():
+            raise ValueError("A separate immutable base checkpoint is required")
+        base_record = json.loads(base_manifest.read_text(encoding="utf-8"))
+        if (base_record.get("include_backbone") is not True or base_record.get("backbone_state_kind", "full") != "full"
+                or base_record.get("base_checkpoint") is not None):
+            raise ValueError("Compact checkpoints require a pinned full, noncompact base")
+        expected_names = base_record.get("manifest", {}).get("trainable_backbone_parameter_names")
+        if expected_names != backbone_parameter_names or manifest.get("trainable_backbone_parameter_names") != expected_names:
+            raise ValueError("Compact checkpoint parameter names differ from the immutable base training scope")
+        base_reference = {"path": os.path.relpath(base, destination.resolve()),
+                          "manifest_sha256": _sha256(base_manifest)}
+        warm_start = manifest.get("warm_start")
+        if isinstance(warm_start, dict) and warm_start.get("checkpoint_manifest_sha256") != base_reference["manifest_sha256"]:
+            raise ValueError("Compact checkpoint base differs from its pinned warm start")
+    elif base_checkpoint is not None:
+        raise ValueError("An immutable base reference is only needed for a compact backbone checkpoint")
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(tempfile.mkdtemp(prefix=f".{destination.name}.tmp-", dir=destination.parent))
     try:
         if include_backbone:
-            torch.save(backbone.state_dict(), temporary / "backbone.pt")
+            state = backbone.state_dict()
+            if backbone_parameter_names is not None:
+                if not set(backbone_parameter_names) <= set(dict(backbone.named_parameters())):
+                    raise ValueError("Compact state must contain existing backbone parameters")
+                state = {name:state[name] for name in backbone_parameter_names}
+            torch.save(state, temporary / "backbone.pt")
         torch.save(head.state_dict(), temporary / "head.pt")
         torch.save(optimizer.state_dict(), temporary / "optimizer.pt")
         if scheduler is not None:
@@ -131,6 +165,9 @@ def save_training_checkpoint(
             "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "include_backbone": include_backbone,
             "has_scheduler": scheduler is not None,
+            "backbone_state_kind": "trainable-overlay-v1" if backbone_parameter_names is not None else "full",
+            "backbone_parameter_names": backbone_parameter_names,
+            "base_checkpoint": base_reference,
             "progress": progress,
             "manifest": manifest,
             "files": _artifact_hashes(temporary),
@@ -154,11 +191,12 @@ def load_training_checkpoint(
     head: torch.nn.Module,
     optimizer: torch.optim.Optimizer | None = None,
     scheduler: Any = None,
+    restore_rng: bool = True,
 ) -> dict[str, Any]:
     """Verify and restore checkpoint state, returning saved progress and metadata."""
     directory = Path(path)
     checkpoint_path = directory / CHECKPOINT_FILE
-    if not directory.is_dir() or not checkpoint_path.is_file():
+    if directory.is_symlink() or not directory.is_dir() or not checkpoint_path.is_file():
         raise FileNotFoundError(f"No training checkpoint found at {directory}")
     checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
     if checkpoint.get("schema_version") != SCHEMA_VERSION:
@@ -177,18 +215,54 @@ def load_training_checkpoint(
     if checkpoint.get("include_backbone"):
         if backbone is None:
             raise ValueError("This checkpoint contains a backbone; pass a backbone to restore it")
-        backbone.load_state_dict(torch.load(directory / "backbone.pt", map_location=device, weights_only=True))
-    head.load_state_dict(torch.load(directory / "head.pt", map_location=device, weights_only=True))
+        # File-backed CPU storage avoids materializing a second full model on
+        # shared-memory accelerators while copying the selected state to GPU.
+        kind = checkpoint.get("backbone_state_kind", "full")
+        if kind == "trainable-overlay-v1":
+            reference = checkpoint.get("base_checkpoint")
+            names = checkpoint.get("backbone_parameter_names")
+            if (not isinstance(reference, dict) or not isinstance(reference.get("path"), str)
+                    or not isinstance(names, list) or not names or len(set(names)) != len(names)):
+                raise ValueError("Compact checkpoint has no valid immutable base or parameter allowlist")
+            if Path(reference["path"]).is_absolute():
+                raise ValueError("Compact checkpoint base references must be relative")
+            base_path = directory / reference["path"]
+            if any(candidate.is_symlink() for candidate in [base_path, *base_path.parents]):
+                raise ValueError("Compact checkpoint bases cannot use symlink paths")
+            base = base_path.resolve()
+            if _sha256(base / CHECKPOINT_FILE) != reference.get("manifest_sha256"):
+                raise ValueError("Compact checkpoint base manifest checksum mismatch")
+            warm_start = checkpoint.get("manifest", {}).get("warm_start")
+            if isinstance(warm_start, dict) and warm_start.get("checkpoint_manifest_sha256") != reference["manifest_sha256"]:
+                raise ValueError("Compact checkpoint base differs from its pinned warm start")
+            base_record = json.loads((base / CHECKPOINT_FILE).read_text(encoding="utf-8"))
+            if (base_record.get("include_backbone") is not True or base_record.get("backbone_state_kind", "full") != "full"
+                    or base_record.get("base_checkpoint") is not None):
+                raise ValueError("Compact checkpoints require a pinned full, noncompact base")
+            expected_names = base_record.get("manifest", {}).get("trainable_backbone_parameter_names")
+            if names != expected_names or checkpoint.get("manifest", {}).get("trainable_backbone_parameter_names") != expected_names:
+                raise ValueError("Compact checkpoint parameter names differ from its base training scope")
+            load_training_checkpoint(base, backbone=backbone, head=head, restore_rng=False)
+            state = torch.load(directory / "backbone.pt", map_location=device, weights_only=True, mmap=True)
+            if set(state) != set(names) or not set(names) <= set(dict(backbone.named_parameters())):
+                raise ValueError("Compact checkpoint does not match its backbone parameter allowlist")
+            backbone.load_state_dict(state, strict=False)
+        elif kind == "full":
+            backbone.load_state_dict(torch.load(directory / "backbone.pt", map_location=device, weights_only=True, mmap=True))
+        else:
+            raise ValueError("Unsupported backbone checkpoint state kind")
+    head.load_state_dict(torch.load(directory / "head.pt", map_location=device, weights_only=True, mmap=True))
 
     if optimizer is not None:
-        optimizer.load_state_dict(torch.load(directory / "optimizer.pt", map_location=device, weights_only=True))
+        optimizer.load_state_dict(torch.load(directory / "optimizer.pt", map_location=device, weights_only=True, mmap=True))
     if scheduler is not None:
         scheduler.load_state_dict(torch.load(directory / "scheduler.pt", map_location=device, weights_only=True))
 
-    rng_state = torch.load(directory / "torch_rng.pt", map_location="cpu", weights_only=True)
-    torch.set_rng_state(rng_state["torch_cpu"])
-    if rng_state["torch_cuda"] is not None and torch.cuda.is_initialized():
-        torch.cuda.set_rng_state_all(rng_state["torch_cuda"])
-    random.setstate(_as_tuples(json.loads((directory / "python_rng.json").read_text(encoding="utf-8"))))
+    if restore_rng:
+        rng_state = torch.load(directory / "torch_rng.pt", map_location="cpu", weights_only=True)
+        torch.set_rng_state(rng_state["torch_cpu"])
+        if rng_state["torch_cuda"] is not None and torch.cuda.is_initialized():
+            torch.cuda.set_rng_state_all(rng_state["torch_cuda"])
+        random.setstate(_as_tuples(json.loads((directory / "python_rng.json").read_text(encoding="utf-8"))))
 
     return {"progress": checkpoint["progress"], "manifest": checkpoint["manifest"]}

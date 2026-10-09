@@ -1,0 +1,16 @@
+{
+  "schema_version": "probability-v2-answerability-policy-v1",
+  "answerability_policy_version": "probability-v2-answerability-v1",
+  "default_mix_percent": {
+    "answerable": 80,
+    "unanswerable": 20
+  },
+  "unanswerable_reasons": [
+    "missing_context",
+    "underdetermined",
+    "external_fact_unavailable",
+    "realized_random_outcome_unknown"
+  ],
+  "reason_allocation": "Always choose an unanswerable reason among the least-assigned reasons in plan history; break ties with the per-assignment deterministic random seed.",
+  "abstention_choice_guidance": "Include one natural target-language choice meaning that the requested answer cannot be determined from the provided information. The author supplies localized wording and a stable choice_id; do not copy English wording mechanically."
+}

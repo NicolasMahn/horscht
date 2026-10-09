@@ -1,0 +1,30 @@
+{
+  "checks": {
+    "continuation": {
+      "groups": 23774,
+      "identical_input_target_and_explanation": true,
+      "identity_allowlist_exact": true,
+      "rows": {
+        "dev": 11339,
+        "train": 23006
+      },
+      "sealed_id_overlap": 0,
+      "train_dev_group_overlap": 0
+    },
+    "warmstart": {
+      "groups": 135043,
+      "identical_input_target_and_explanation": true,
+      "identity_allowlist_exact": true,
+      "rows": {
+        "dev": 7202,
+        "train": 128263
+      },
+      "sealed_id_overlap": 0,
+      "train_dev_group_overlap": 0
+    }
+  },
+  "packager_sha256": "66f9dde59481d79bd8c6434597c1d08831291ac80228ca905de26728fe50df06",
+  "schema_version": "horscht-dataset-verification-v1",
+  "unique_published_ids": 154608,
+  "verified_at": "2026-10-09"
+}

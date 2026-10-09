@@ -1,0 +1,26 @@
+Horscht decision model — Nicolas, 2026.
+
+Based on Qwen/Qwen3-4B, revision 1cfa9a7208912126459214e8b04321603b3df60c.
+Upstream copyright: Copyright 2024 Alibaba Cloud.
+Upstream source: https://huggingface.co/Qwen/Qwen3-4B
+Upstream license: Apache License, Version 2.0 (LICENSE_QWEN).
+Modified files: final transformer block (layers.35); source replacement tensors
+in decision.safetensors were trained by Nicolas. The decision head is an original model contribution (CC-BY-4.0, with the
+checkpoint noncommercial policy). Loading software is MIT (LICENSE_CODE).
+The upstream tokenizer was reserialized by Transformers for the training
+checkpoint, with its runtime configuration saved; tokenizer files are derivatives
+of the Apache-2.0 upstream assets. Vocabulary and merge rules were not trained.
+
+Training-source credits include:
+SciQ: Johannes Welbl, Nelson F. Liu, Matt Gardner, 2017. Crowdsourcing Multiple
+Choice Science Questions. https://huggingface.co/datasets/allenai/sciq
+CC-BY-NC-3.0. The resulting checkpoint carries a noncommercial-use policy.
+Banking77: Iñigo Casanueva et al., 2020. Efficient Intent Detection with Dual
+Sentence Encoders. https://huggingface.co/datasets/PolyAI/banking77 (CC-BY-4.0).
+Typed Decisions: the pinned source and Apache-2.0 provenance are retained in the
+associated dataset release, together with document-source attribution records.
+
+Generated replay/game/document-question contributions by Nicolas: CC-BY-4.0.
+Original document texts retain their own rights. See the associated dataset
+NOTICE and source manifests for individual document licenses and attribution.
+No external benchmark content is distributed in this model release.

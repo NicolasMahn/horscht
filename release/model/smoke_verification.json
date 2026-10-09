@@ -1,0 +1,22 @@
+{
+  "status": "passed",
+  "example_source": "invented probability sentence, no corpus or benchmark content",
+  "device": "cpu",
+  "torch": "2.14.0+cpu",
+  "parameter_dtype": "float32",
+  "autocast_dtype": "bfloat16",
+  "head_exact_reference_match": true,
+  "formatter_exact_reference_match": true,
+  "pooling_exact_reference_match": true,
+  "probabilities_normalized": true,
+  "result": {
+    "choice_index": 0,
+    "probabilities": [
+      0.5527475476264954,
+      0.4472525119781494
+    ],
+    "input_tokens": 39,
+    "temperature": 1.0
+  },
+  "elapsed_seconds": 3.832738555036485
+}

@@ -196,6 +196,8 @@ def test_protocol_is_fixed_to_locked_bundle_and_candidate_order():
 
 
 def test_current_corpus_protocol_reuses_bundle_and_pins_one_selected_checkpoint():
+    if not (blind_runner.ROOT / "data/external_evaluation/system-test-lock-current-corpus-2026-10-01.json").is_file():
+        pytest.skip("Historical evaluation bundle metadata is not installed")
     protocol_path = blind_runner.ROOT / "evaluation/protocols/current-corpus-blind-mcq-v1.json"
     protocol, digest = blind_runner._load_protocol(protocol_path)
     lock, items_path = blind_runner._validate_system_bundle(protocol)
@@ -448,6 +450,92 @@ def test_selected_candidate_and_reflection_receipt_bind_checkpoint_payload_hashe
     assert "Synthetic question contents" not in str(raised.value)
 
 
+def test_snapshot_bound_candidate_binds_compact_overlay_to_pinned_base(monkeypatch, tmp_path):
+    import os
+
+    from evaluation.snapshot_bound_protocol import validate_compact_checkpoint_binding
+
+    monkeypatch.setattr(blind_runner, "ROOT", tmp_path)
+    run = _candidate_fixture(tmp_path, "last-block")
+    checkpoint_dir = run / "checkpoints/best"
+    checkpoint_path = checkpoint_dir / "checkpoint.json"
+    checkpoint = json.loads(checkpoint_path.read_text())
+    run_manifest_path = run / "manifest.json"
+    run_manifest = json.loads(run_manifest_path.read_text())
+    base = tmp_path / "runs/original/checkpoints/base"
+    base.mkdir(parents=True)
+    base_backbone = base / "backbone.pt"
+    base_backbone.write_bytes(b"immutable full backbone")
+    base_head = base / "head.pt"
+    base_head.write_bytes(b"immutable base head")
+    base_data = {
+        "schema_version": 1,
+        "include_backbone": True,
+        "backbone_state_kind": "full",
+        "backbone_parameter_names": None,
+        "base_checkpoint": None,
+        "files": {"backbone.pt": _sha256(base_backbone), "head.pt": _sha256(base_head)},
+        "manifest": {
+            "arm": "last-block", "repo": run_manifest["repo"], "revision": run_manifest["revision"],
+            "head_architecture": "last-token-linear-v1",
+            "trainable_backbone_parameter_names": run_manifest["trainable_backbone_parameter_names"],
+        },
+    }
+    (base / "checkpoint.json").write_text(json.dumps(base_data))
+    base_manifest_sha = _sha256(base / "checkpoint.json")
+    run_manifest["warm_start"] = {
+        "checkpoint": "/workspace/runs/original/checkpoints/base",
+        "checkpoint_manifest_sha256": base_manifest_sha,
+        "backbone_sha256": _sha256(base_backbone),
+        "head_sha256": _sha256(base_head),
+    }
+    run_manifest_path.write_text(json.dumps(run_manifest))
+    names = run_manifest["trainable_backbone_parameter_names"]
+    checkpoint.update({
+        "backbone_state_kind": "trainable-overlay-v1",
+        "backbone_parameter_names": names,
+        "base_checkpoint": {
+            "path": os.path.relpath(base, checkpoint_dir).replace(os.sep, "/"),
+            "manifest_sha256": base_manifest_sha,
+        },
+        "manifest": dict(run_manifest),
+    })
+    checkpoint_path.write_text(json.dumps(checkpoint))
+    base_binding = validate_compact_checkpoint_binding(tmp_path, checkpoint_dir, checkpoint, run_manifest)
+    protocol = {
+        "protocol_id": "independent-mcq-current-last-block-2026-10-v4",
+        "model_key": "qwen-instruct", "model_id": run_manifest["repo"],
+        "model_revision": run_manifest["revision"],
+        "run_paths": {"last-block": "runs/last-block"},
+        "prompt_format": {"id": run_manifest["formatter"]},
+        "inference": {
+            "pooling": run_manifest["pooling"], "choice_head_capacity": run_manifest["capacity"],
+            "input_limit_tokens": run_manifest["max_tokens"], "attention_backend": run_manifest["attention_backend"],
+            "parameters_dtype": run_manifest["parameters_dtype"],
+            "backbone_autocast": run_manifest["compute_autocast"],
+        },
+        "training_snapshot_manifest_sha256": run_manifest["snapshot_manifest_sha256"],
+        "system_test_lock_sha256": run_manifest["system_test_manifest_sha256"],
+        "selection_binding": {
+            "best_checkpoint_relative": "checkpoints/best",
+            "selected_checkpoint_path": "runs/last-block/checkpoints/best",
+            "active_run_manifest_path": "runs/last-block/manifest.json",
+            "run_manifest_sha256": _sha256(run_manifest_path),
+            "checkpoint_source_run_manifest_path": "runs/last-block/manifest.json",
+            "checkpoint_source_run_manifest_sha256": _sha256(run_manifest_path),
+            "base_checkpoint_binding": base_binding,
+        },
+    }
+
+    candidate = blind_runner._selected_candidate("last-block", run, protocol)
+    assert candidate["backbone_state_kind"] == "trainable-overlay-v1"
+    assert candidate["base_checkpoint_binding"] == base_binding
+
+    base_backbone.write_bytes(b"changed full backbone")
+    with pytest.raises(blind_runner.BlindEvaluationError) as raised:
+        blind_runner._selected_candidate("last-block", run, protocol)
+    assert raised.value.safe_code == "candidate_checkpoint_base_binding_invalid"
+
 @pytest.mark.parametrize("arm", ["full", "head", "last-block"])
 def test_single_candidate_selection_binding_allows_only_pinned_recovery_target(monkeypatch, tmp_path, arm):
     monkeypatch.setattr(blind_runner, "ROOT", tmp_path)
@@ -525,6 +613,78 @@ def last_block_candidate(tmp_path, monkeypatch):
         },
     }
     return run, protocol
+
+
+def test_option_attention_candidate_binds_architecture_metadata(last_block_candidate):
+    run, protocol = last_block_candidate
+    architecture = "option-context-attention-v1"
+    pooling = "option-text mean; context/question token attention"
+    protocol["protocol_id"] = "independent-mcq-current-option-attention-2026-10-v1"
+    protocol["inference"]["pooling"] = pooling
+    fields = {"head_architecture": architecture, "head_attention_size": 256,
+              "option_span_metadata": "offset overlap", "attention_head_sha256": "5" * 64,
+              "pooling": pooling}
+    manifest_path = run / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest.update(fields)
+    manifest_path.write_text(json.dumps(manifest))
+    checkpoint_path = run / "checkpoints/best/checkpoint.json"
+    checkpoint = json.loads(checkpoint_path.read_text())
+    checkpoint["manifest"].update(fields)
+    checkpoint_path.write_text(json.dumps(checkpoint))
+    candidate = blind_runner._selected_candidate("last-block", run, protocol)
+    assert candidate["head_architecture"] == architecture
+    checkpoint["manifest"]["head_attention_size"] = 128
+    checkpoint_path.write_text(json.dumps(checkpoint))
+    with pytest.raises(blind_runner.BlindEvaluationError) as raised:
+        blind_runner._selected_candidate("last-block", run, protocol)
+    assert raised.value.safe_code == "candidate_head_architecture_binding_invalid"
+
+
+def test_option_attention_scorer_requests_token_states(monkeypatch):
+    import torch
+    import scalable_training
+
+    calls = []
+    features = object()
+
+    def encode(*args, **kwargs):
+        calls.append(kwargs)
+        return features
+
+    def head(value, counts):
+        assert value is features and counts.tolist() == [2]
+        return torch.tensor([[1., 2.]])
+
+    monkeypatch.setattr(scalable_training, "encode_batch", encode)
+    scorer = blind_runner._model_scorer(torch, None, None, head,
+                                      {"inference": {"input_limit_tokens": 32768}},
+                                      {"device": "cpu", "head_architecture": "option-context-attention-v1"})
+    assert scorer({"id": "synthetic", "context": "", "question": "synthetic", "options": ["a", "b"]}) == [1., 2.]
+    assert calls == [{"cache": None, "head_architecture": "option-context-attention-v1"}]
+
+
+def test_option_attention_protocol_pins_pooling(monkeypatch, tmp_path):
+    protocol = json.loads(blind_runner.PROTOCOL_PATH.read_text())
+    protocol["protocol_id"] = "independent-mcq-current-option-attention-2026-10-v1"
+    protocol["candidates"] = ["last-block"]
+    protocol["run_paths"] = {"last-block": "runs/synthetic-attention"}
+    protocol["inference"]["pooling"] = "option-text mean; context/question token attention"
+    protocol["selection_binding"] = {"kind": "completed-development-report", **{
+        key: "synthetic" for key in ("report_path", "report_sha256", "best_checkpoint_relative",
+                                    "selected_checkpoint_path", "checkpoint_manifest_sha256", "run_manifest_sha256",
+                                    "checkpoint_source_run_manifest_path", "checkpoint_source_run_manifest_sha256")}}
+    protocol["scoring"].pop("publish_aggregate_only_after_both_candidates_complete", None)
+    protocol["scoring"]["publish_aggregate_only_after_all_locked_candidates_complete"] = True
+    monkeypatch.setattr(blind_runner, "ROOT", tmp_path)
+    path = tmp_path / "protocol.json"
+    path.write_text(json.dumps(protocol))
+    assert blind_runner._load_protocol(path)[0]["protocol_id"] == protocol["protocol_id"]
+    protocol["inference"]["pooling"] = "last non-padding token"
+    path.write_text(json.dumps(protocol))
+    with pytest.raises(blind_runner.BlindEvaluationError) as raised:
+        blind_runner._load_protocol(path)
+    assert raised.value.safe_code == "protocol_head_pooling_invalid"
 
 
 @pytest.mark.parametrize("missing", ["state-policy", "backbone-payload", "both"])

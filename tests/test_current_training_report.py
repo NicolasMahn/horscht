@@ -1,5 +1,8 @@
 import json
 import re
+from pathlib import Path
+
+import pytest
 
 from build_current_training_report import build, load, merge_history
 
@@ -18,7 +21,13 @@ def test_resume_replaces_rolled_back_work_and_coalesces_evaluation():
     assert merged[3] == {'update': 3, 'train_loss': .5}
 
 
+def require_historical_artifact(relative):
+    if not (Path(__file__).resolve().parents[1] / relative).is_file():
+        pytest.skip("Historical aggregate report artifact is not installed")
+
+
 def test_completed_report_has_unique_curves_and_correct_denominators():
+    require_historical_artifact('runs/current-corpus-2026-10-01/recovery-2026-10-04/full/report.json')
     data = load()
     history, report, status, config, resume = data
     assert len(history) == 8018
@@ -44,6 +53,7 @@ def test_completed_report_has_unique_curves_and_correct_denominators():
 
 
 def test_verified_external_aggregates_replace_pending_status():
+    require_historical_artifact('runs/current-corpus-2026-10-01/recovery-2026-10-04/full/report.json')
     from build_current_training_report import load_benchmark, validate_benchmark
     benchmark = load_benchmark()
     validate_benchmark(benchmark)
@@ -61,6 +71,7 @@ def test_verified_external_aggregates_replace_pending_status():
 
 
 def test_external_counts_cannot_silently_disagree():
+    require_historical_artifact('runs/current-corpus-2026-10-01/recovery-2026-10-04/full/report.json')
     import copy
     import pytest
     from build_current_training_report import load_benchmark, validate_benchmark
@@ -71,6 +82,7 @@ def test_external_counts_cannot_silently_disagree():
 
 
 def test_original_qwen_is_distinct_exploratory_end_to_end_comparison():
+    require_historical_artifact('runs/current-corpus-2026-10-01/recovery-2026-10-04/full/report.json')
     from build_current_training_report import load_benchmark, load_original_benchmark
     html = build(*load(), benchmark=load_benchmark(), original_benchmark=load_original_benchmark())
     assert '51.72%' in html and '9,245 / 17,874 correct' in html
@@ -83,6 +95,7 @@ def test_original_qwen_is_distinct_exploratory_end_to_end_comparison():
 
 
 def test_original_qwen_rejects_mismatched_suite():
+    require_historical_artifact('runs/current-corpus-2026-10-01/recovery-2026-10-04/full/report.json')
     import copy
     import pytest
     from build_current_training_report import load_benchmark, load_original_benchmark, validate_original_benchmark

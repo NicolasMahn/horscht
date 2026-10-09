@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import random
 import signal
 import tempfile
+import threading
 from collections import OrderedDict
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -15,6 +17,22 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 import torch
+
+
+def warmup_cosine_scheduler(optimizer, *, total_updates: int, warmup_fraction: float):
+    """Scale both parameter groups together, starting with a small first update."""
+    if total_updates < 1 or not 0 <= warmup_fraction < 1:
+        raise ValueError("A positive update budget and warmup fraction in [0, 1) are required")
+    warmup_updates = min(math.ceil(total_updates * warmup_fraction), total_updates - 1)
+
+    def multiplier(completed_updates):
+        if completed_updates < warmup_updates:
+            return (completed_updates + 1) / warmup_updates
+        decay_updates = total_updates - warmup_updates
+        progress = min(1., (completed_updates - warmup_updates) / decay_updates)
+        return .5 * (1 + math.cos(math.pi * progress))
+
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, multiplier)
 
 
 def atomic_json(path: Path, value: Any) -> None:
@@ -115,10 +133,20 @@ class StopController:
         self.requested = False
         self.reason: str | None = None
         self._handlers: dict[int, Any] = {}
+        self._event = threading.Event()
 
     def request(self, reason: str = "requested") -> None:
         self.requested = True
         self.reason = reason
+        self._event.set()
+
+    def wait(self, seconds: float) -> None:
+        self._event.wait(seconds)
+
+    def acknowledge(self) -> None:
+        """Allow final verification after a deliberate training plateau stop."""
+        self.requested = False
+        self._event.clear()
 
     def _signal(self, number, frame) -> None:
         self.request(signal.Signals(number).name)
@@ -137,11 +165,16 @@ def run_epoch_updates(
     plan: EpochPlan, cursor: TrainingCursor, *, stop: StopController,
     step: Callable[[list[list[str]]], dict[str, Any]],
     observe: Callable[[TrainingCursor, dict[str, Any]], None],
+    before_step: Callable[[], bool] | None = None,
 ) -> bool:
     """Advance only completed optimizer updates; return false after a stop."""
     if cursor.epoch != plan.epoch or not 0 <= cursor.next_update <= len(plan.updates):
         raise ValueError("Resume cursor does not belong to the epoch plan")
     while cursor.next_update < len(plan.updates):
+        if stop.requested:
+            return False
+        if before_step is not None and not before_step():
+            return False
         if stop.requested:
             return False
         groups = plan.updates[cursor.next_update]
@@ -157,6 +190,33 @@ def run_epoch_updates(
     cursor.epoch += 1
     cursor.next_update = 0
     return True
+
+
+def wait_for_resources(check, *, stop, release_cache=None, before_wait=None, publish=None, poll_seconds=30):
+    """Keep the same completed update while pressure clears; consume no RNG."""
+    from paired_training import TrainingMemoryPressure
+
+    released = waiting = False
+    while not stop.requested:
+        try:
+            snapshot = check()
+        except TrainingMemoryPressure as pressure:
+            if release_cache is not None and not released:
+                release_cache()
+                released = True
+                continue
+            if not waiting:
+                if before_wait is not None:
+                    before_wait(pressure.snapshot)
+                waiting = True
+            if publish is not None:
+                publish(pressure.snapshot, True)
+            stop.wait(poll_seconds)
+        else:
+            if waiting and publish is not None:
+                publish(snapshot, False)
+            return not stop.requested
+    return False
 
 
 class FeatureCache:

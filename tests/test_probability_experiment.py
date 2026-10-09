@@ -245,3 +245,17 @@ def test_invalid_probability_v2_targets_or_choice_alignment_are_rejected(tmp_pat
 
     with pytest.raises(ValueError, match="invalid probability-v2 row|stable IDs"):
         load_probability_jsonl(path)
+
+
+def test_six_decimal_soft_targets_normalize_at_tensor_boundary_without_rewriting_source():
+    row = _soft_row()
+    row['target_distribution'] = [.333333, .333333, .333333]
+    before = copy.deepcopy(row)
+    targets, _, _ = targets_for_rows([row])
+    assert row == before
+    assert float(targets[0].sum()) == pytest.approx(1.)
+    torch.testing.assert_close(targets[0, :3], torch.full((3,), 1 / 3))
+    assert not targets[0, 3:].any()
+    row['target_distribution'] = [.33333, .33333, .33333]
+    with pytest.raises(ValueError, match='rounding drift'):
+        targets_for_rows([row])

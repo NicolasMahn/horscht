@@ -148,3 +148,28 @@ def test_development_plateau_requires_consecutive_meaningful_stagnation():
     assert development_plateau([1., .9, .89999, .89998], patience=2, min_delta=.0001)
     assert not development_plateau([1., .9, .89999, .8], patience=2, min_delta=.0001)
     assert not development_plateau([1., 2., 3.], patience=0, min_delta=.0001)
+
+
+def test_warmup_cosine_scales_groups_and_resume_preserves_next_update(tmp_path):
+    from training_loop import warmup_cosine_scheduler
+    backbone, head, optimizer = toy_state()
+    optimizer.param_groups[0]['lr'] = .1
+    optimizer.add_param_group({'params': [torch.nn.Parameter(torch.ones(1))], 'lr': .01})
+    scheduler = warmup_cosine_scheduler(optimizer, total_updates=10, warmup_fraction=.3)
+    assert optimizer.param_groups[0]['lr'] == pytest.approx(.1 / 3)
+    rates = []
+    for _ in range(4):
+        rates.append([group['lr'] for group in optimizer.param_groups])
+        optimizer.step()
+        scheduler.step()
+    assert rates[2][0] == pytest.approx(.1)
+    assert all(first == pytest.approx(second * 10) for first, second in rates)
+    path = save_training_checkpoint(tmp_path / 'scheduled', backbone=backbone, head=head,
+                                    optimizer=optimizer, scheduler=scheduler, progress={}, manifest={})
+    expected = [group['lr'] for group in optimizer.param_groups]
+    load_training_checkpoint(path, backbone=backbone, head=head, optimizer=optimizer, scheduler=scheduler)
+    assert [group['lr'] for group in optimizer.param_groups] == expected
+    for _ in range(6):
+        optimizer.step()
+        scheduler.step()
+    assert all(group['lr'] == 0 for group in optimizer.param_groups)

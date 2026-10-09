@@ -1,0 +1,24 @@
+This is a mixed-source model release. No single license replaces all source rights.
+
+Project software, including horscht_model.py, is MIT licensed (LICENSE_CODE).
+Nicolas grants his original model/data contributions under Creative Commons Attribution 4.0
+International: https://creativecommons.org/licenses/by/4.0/legalcode.en
+
+The Qwen3-4B upstream backbone and tokenizer are Apache License 2.0, with its full
+license retained in LICENSE_QWEN. The final transformer block was modified by
+Nicolas through training; decision.safetensors contains those modified block
+weights and the original decision head, as documented in release_manifest.json.
+
+NONCOMMERCIAL USE POLICY: This particular resulting checkpoint may only be used
+for noncommercial purposes. Its training includes SciQ under Creative Commons
+Attribution-NonCommercial 3.0 Unported. This project policy carries forward the
+recorded training-source restriction without claiming that every data license
+necessarily applies to model weights in the same way in every jurisdiction.
+SciQ source license: https://creativecommons.org/licenses/by-nc/3.0/legalcode
+
+Document training sources and public datasets retain their own licenses,
+attributions, and applicable terms. Those are listed in the associated dataset
+release. Nicolas's grant does not grant rights to third-party material and does
+not erase NC, attribution, share-alike, or source-specific obligations.
+
+No warranties or claims of fitness are provided. This is an experimental model.

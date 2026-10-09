@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Horscht · Learning curves</title>
+<style>
+@@THEME@@
+*{box-sizing:border-box}body{margin:0;background:var(--canvas);color:var(--ink);font:16px/1.55 system-ui,sans-serif}
+main{max-width:1500px;margin:auto;padding:36px 32px 64px}header{display:flex;justify-content:space-between;align-items:baseline;gap:20px;flex-wrap:wrap;margin-bottom:8px}
+h1{font-size:30px;font-weight:650;letter-spacing:-.7px;margin:0}h2{font-size:20px;font-weight:650;margin:0 0 8px}h3{font-size:17px;margin:0 0 8px;font-weight:600}
+p{margin:8px 0 16px}.muted,.small,.probability{color:var(--muted)}.small{font-size:14px}.meta{font-size:14px;color:var(--muted)}
+section{margin-top:28px}.surface{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:22px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.chart{min-width:0;padding:20px 12px 10px}.chart h3,.chart>p{margin-left:12px;margin-right:12px}
+.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;padding:13px 14px;border-bottom:1px solid var(--line);vertical-align:top;font-variant-numeric:tabular-nums}
+thead th{color:var(--muted);font-weight:500;white-space:nowrap}tbody th{font-weight:600}tbody tr:last-child>*{border-bottom:0}.summary td{white-space:nowrap}
+.summary tbody th{white-space:nowrap}
+.note{border-left:3px solid var(--blue);padding:4px 0 4px 16px;margin:16px 0;color:var(--muted)}
+button,select{font:inherit;font-size:14px;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:8px 12px}button{cursor:pointer}button:hover{border-color:var(--blue)}
+button:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--blue);outline-offset:3px}.controls{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:12px 0 16px}label{font-size:14px}input[type=checkbox]{accent-color:var(--blue)}
+.predictions{min-width:1100px}.predictions th:first-child{min-width:340px;max-width:460px;font-weight:400}.predictions td{min-width:150px}.predictions p{margin:5px 0 9px}.predictions details{font-size:14px}summary{cursor:pointer}details ul{padding-left:18px;margin:8px 0}.correct{color:var(--good)}.incorrect{color:var(--bad)}
+.technical{margin-top:24px}.technical>summary{font-weight:600}code{font-size:13px;overflow-wrap:anywhere}.technical li{margin:15px 0}.technical ul{padding-left:20px}
+.facts{display:flex;gap:24px;flex-wrap:wrap;color:var(--muted);font-size:14px;margin:12px 0 22px}.facts strong{color:var(--ink)}
+footer{font-size:14px;color:var(--muted);margin-top:24px;display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}
+[hidden]{display:none!important}@media(max-width:850px){main{padding:24px 14px}.grid{grid-template-columns:1fr}.surface{padding:14px}.chart{padding:14px 4px}h1{font-size:26px}.facts{gap:12px}}
+@media print{body{background:var(--paper)}main{max-width:none;padding:10px}.controls,footer button{display:none}.surface{break-inside:avoid}.scroll{overflow:visible}.predictions{font-size:10px;min-width:0}.predictions th:first-child{min-width:0}.predictions td{min-width:0}.grid{grid-template-columns:1fr}}
+</style>
+<script>@@PLOTLY@@</script>
+</head>
+<body><main>
+<header><h1>Horscht · Learning curves</h1><span class="meta">@@MODEL_COUNT@@ measured candidates · @@DATE@@</span></header>
+<p class="muted">A small decision head learns from frozen model features. Each question supplies its own choices.</p>
+<div class="facts"><span><strong>@@TRAIN_COUNT@@</strong> training questions</span><span><strong>@@PROBE_COUNT@@</strong> exploratory probes</span><span><strong>@@CAPACITY@@</strong> output slots · slots @@SLOTS@@ exercised</span><span><strong>1</strong> seed per candidate</span></div>
+<div class="surface scroll"><table class="summary"><thead><tr><th>Model</th><th>Training loss · start → end</th><th>Training correct</th><th>First 100% / stop update</th><th>Probe correct</th><th>Probe loss</th><th>Overfit + reload</th></tr></thead><tbody>@@SUMMARY_ROWS@@</tbody></table></div>
+<section class="grid" aria-label="Loss curves">
+  <div class="surface chart"><h3>Training loss</h3><p class="small">All @@TRAIN_COUNT@@ training questions after each update. Lower is better.</p>@@TRAIN_LOSS@@</div>
+  <div class="surface chart"><h3>Probe loss</h3><p class="small">@@PROBE_COUNT@@ unused questions, observed without affecting updates or stopping.</p>@@PROBE_LOSS@@</div>
+</section>
+<p class="note">@@PEAK_NOTE@@</p>
+<section class="grid" aria-label="Accuracy curves">
+  <div class="surface chart"><h3>Training accuracy</h3><p class="small">Each question changes this value by @@TRAIN_STEP@@ percentage points.</p>@@TRAIN_ACCURACY@@</div>
+  <div class="surface chart"><h3>Probe accuracy</h3><p class="small">Each question changes this value by @@PROBE_STEP@@ percentage points.</p>@@PROBE_ACCURACY@@</div>
+</section>
+<p class="small">Hover for exact values; click a legend entry to hide a model, or double-click to isolate it. Loss charts offer a log scale. Lines connect measured updates without smoothing and end at each run’s stopping point. Dotted lines show uniform-choice baselines.</p>
+<section class="grid">
+  <div class="surface"><h2>Probe results by task</h2><div class="scroll"><table><thead><tr><th>Task</th>@@MODEL_HEADERS@@</tr></thead><tbody>@@FAMILY_ROWS@@</tbody></table></div><p class="small">Correct / total. These small groups help inspect failures; they cannot reliably rank models.</p></div>
+  <div class="surface"><h2>Measured time</h2><div class="scroll"><table><thead><tr><th>Model</th><th>Encode @@EXAMPLE_COUNT@@ inputs</th><th>Fit + monitor</th><th>Elapsed incl. waits</th></tr></thead><tbody>@@TIMING_ROWS@@</tbody></table></div><p class="small">CPU wall time, one run. Total run time includes loading, download waits, and any user-requested pauses; compare the encoding and fitting columns for compute time. These are not production latency measurements; fresh-process verification is separate.</p></div>
+</section>
+<section class="surface"><h2>Individual decisions</h2><div class="controls"><label>Show <select id="split"><option value="probe">Probe questions</option><option value="train">Training questions</option><option value="all">All questions</option></select></label><label><input id="errors" type="checkbox"> At least one model is wrong</label><span id="visible-count" class="small" aria-live="polite"></span></div>
+<div class="scroll"><table class="predictions"><thead><tr><th>Input and available choices</th><th>Correct answer</th>@@MODEL_HEADERS@@</tr></thead><tbody id="examples">@@EXAMPLE_ROWS@@</tbody></table></div><p class="small">Expand a prediction to see every choice’s probability. These are raw softmax probabilities, not calibrated confidence.</p></section>
+<section class="surface"><h2>What this run establishes</h2><p>A trained head can associate these frozen representations with the supplied answers. The backbone did not change. The probes are new values within the same task families, not an independent benchmark. No winner is selected.</p>
+<p class="small">@@SETTINGS@@. All models receive the same plain text, without chat templates. Full-batch training stops at a ten-update checkpoint when training accuracy is 100% and loss ≤ 0.02, or at @@MAX_STEPS@@ updates. Probe measurements never choose the checkpoint.</p>
+<details class="technical"><summary>Reproducibility and raw measurements</summary><p class="small">Pinned checkpoint revisions, exact examples, per-update metrics, predictions and reload results are embedded in this file. The JSON download preserves them. Update 0 is the randomly initialized head, not the original language model answering through its vocabulary head.</p><ul>@@REVISIONS@@</ul></details></section>
+<footer><span>Generated @@GENERATED@@ · Self-contained; no network requests required.</span><button id="download" type="button">Download measurements JSON</button></footer>
+</main>
+<script id="measurements" type="application/json">@@RECORDS_JSON@@</script>
+<script>
+const split = document.getElementById('split');
+const errors = document.getElementById('errors');
+function filterExamples(){
+  let count=0;
+  document.querySelectorAll('#examples tr').forEach(row=>{
+    row.hidden=(split.value!=='all'&&row.dataset.split!==split.value)||(errors.checked&&row.dataset.error!=='true');
+    if(!row.hidden)count++;
+  });
+  document.getElementById('visible-count').textContent=`${count} questions`;
+}
+split.addEventListener('change',filterExamples);errors.addEventListener('change',filterExamples);filterExamples();
+document.getElementById('download').addEventListener('click',()=>{
+  const blob=new Blob([document.getElementById('measurements').textContent],{type:'application/json'});
+  const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='horscht-measurements.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+});
+</script></body></html>

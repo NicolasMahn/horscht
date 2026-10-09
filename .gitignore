@@ -12,3 +12,14 @@ dataset_audit/audit-*/
 
 # Generated reports (templates are tracked)
 report*.html
+!report_template.html
+
+# Hugging Face payloads; Git tracks their cards, manifests and export code.
+release/model/*.safetensors
+release/model/tokenizer/
+release/dataset/**/*.jsonl
+release/dataset/**/*.jsonl.gz
+release/dataset/**/*.parquet
+release/dataset/**/*.arrow
+release/dataset/**/*.zip
+!release/dataset/document-attribution.jsonl

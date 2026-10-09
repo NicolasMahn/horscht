@@ -9,6 +9,7 @@ import math
 import os
 import signal
 import tempfile
+import threading
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from types import SimpleNamespace
@@ -23,7 +24,18 @@ DEFAULT_OUTPUT = EXTERNAL_DATA_ROOT / "results" / "paired-overnight-2026-09-30"
 DEFAULT_RECEIPT = ROOT / "runs" / "overnight-2026-09-30" / "generation-reflection-receipt.json"
 DEFAULT_FULL_RUN = ROOT / "runs" / "paired-overnight-2026-09-30" / "full"
 DEFAULT_HEAD_RUN = ROOT / "runs" / "paired-overnight-2026-09-30" / "head"
+SNAPSHOT_BOUND_PROTOCOL_IDS = {
+    "independent-mcq-current-last-block-2026-10-v3",
+    "independent-mcq-current-last-block-2026-10-v4",
+}
+FAST_SELECTION_BINDING_KIND = "fast-development-selection"
+FAST_SELECTION_BINDING_FIELDS = {
+    "fast_manifest_path", "fast_manifest_sha256", "fast_selection_path", "fast_selection_sha256",
+    "fast_metrics_path", "fast_metrics_sha256", "fast_candidate_index_path", "fast_candidate_index_sha256",
+    "selected_checkpoint_update", "training_max_tokens", "evaluation_input_limit_tokens",
+}
 _STOP_REQUESTED = False
+_STOP_EVENT = threading.Event()
 _SCORE_SUM_KEYS = (
     "negative_log_likelihood_sum",
     "multiclass_brier_score_sum",
@@ -44,6 +56,15 @@ class BlindEvaluationError(RuntimeError):
         if set(metadata) - allowed or any(type(value) is not int or value < 0 for value in metadata.values()):
             raise ValueError("unsafe evaluation status metadata")
         self.safe_metadata = metadata
+
+
+class _EvaluationStopSignal:
+    @property
+    def requested(self) -> bool:
+        return _STOP_REQUESTED
+
+    def wait(self, seconds: float) -> None:
+        _STOP_EVENT.wait(seconds)
 
 
 def _now() -> str:
@@ -146,19 +167,84 @@ def _load_protocol(path: Path = PROTOCOL_PATH) -> tuple[dict[str, Any], str]:
         "independent-mcq-current-full-2026-10-v1": ["full"],
         "independent-mcq-current-head-2026-10-v1": ["head"],
         "independent-mcq-current-last-block-2026-10-v1": ["last-block"],
+        **{protocol_id: ["last-block"] for protocol_id in SNAPSHOT_BOUND_PROTOCOL_IDS},
+        "independent-mcq-current-option-attention-2026-10-v1": ["last-block"],
     }
     if not isinstance(candidates, list) or protocol_id not in allowed_protocols or candidates != allowed_protocols[protocol_id]:
         raise BlindEvaluationError("protocol_candidate_contract_invalid")
+    expected_pooling = ("option-text mean; context/question token attention"
+                        if protocol_id == "independent-mcq-current-option-attention-2026-10-v1"
+                        else "last non-padding token")
+    if protocol.get("inference", {}).get("pooling") != expected_pooling:
+        raise BlindEvaluationError("protocol_head_pooling_invalid")
     if not isinstance(protocol.get("run_paths"), dict) or set(protocol["run_paths"]) != set(candidates):
         raise BlindEvaluationError("protocol_run_paths_invalid")
     selection_binding = protocol.get("selection_binding")
-    if protocol_id in {"independent-mcq-current-full-2026-10-v1", "independent-mcq-current-head-2026-10-v1", "independent-mcq-current-last-block-2026-10-v1"}:
+    deferred_policy = protocol.get("development_execution")
+    deferred_binding_fields = {
+        "deferred_selection_sha256", "deferred_candidate_index_sha256", "selected_checkpoint_update",
+    }
+    if deferred_policy is not None:
+        from evaluation.snapshot_bound_protocol import DEFERRED_DEVELOPMENT_EXECUTION_V1
+
+        if protocol_id != "independent-mcq-current-last-block-2026-10-v4" or deferred_policy != DEFERRED_DEVELOPMENT_EXECUTION_V1:
+            raise BlindEvaluationError("protocol_deferred_development_contract_invalid")
+    if protocol_id in {"independent-mcq-current-full-2026-10-v1", "independent-mcq-current-head-2026-10-v1", "independent-mcq-current-last-block-2026-10-v1", *SNAPSHOT_BOUND_PROTOCOL_IDS, "independent-mcq-current-option-attention-2026-10-v1"}:
         required_binding_fields = {
             "kind", "report_path", "report_sha256", "best_checkpoint_relative",
             "selected_checkpoint_path", "checkpoint_manifest_sha256", "run_manifest_sha256",
             "checkpoint_source_run_manifest_path", "checkpoint_source_run_manifest_sha256",
         }
-        if not isinstance(selection_binding, dict) or set(selection_binding) != required_binding_fields or selection_binding.get("kind") != "completed-development-report":
+        if protocol_id in SNAPSHOT_BOUND_PROTOCOL_IDS:
+            allowed_binding_fields = required_binding_fields | {"active_run_manifest_path", "base_checkpoint_binding"}
+            if deferred_policy is not None:
+                allowed_binding_fields |= deferred_binding_fields
+            is_fast_binding = isinstance(selection_binding, dict) and selection_binding.get("kind") == FAST_SELECTION_BINDING_KIND
+            if is_fast_binding:
+                allowed_binding_fields |= FAST_SELECTION_BINDING_FIELDS
+            binding_valid = (
+                isinstance(selection_binding, dict)
+                and required_binding_fields <= set(selection_binding)
+                and set(selection_binding) <= allowed_binding_fields
+                and isinstance(selection_binding.get("active_run_manifest_path"), str)
+                and (
+                    protocol_id != "independent-mcq-current-last-block-2026-10-v4"
+                    or isinstance(selection_binding.get("base_checkpoint_binding"), dict)
+                )
+                and (
+                    deferred_policy is None
+                    or (
+                        deferred_binding_fields <= set(selection_binding)
+                        and all(isinstance(selection_binding.get(key), str) and len(selection_binding[key]) == 64
+                                for key in ("deferred_selection_sha256", "deferred_candidate_index_sha256"))
+                        and type(selection_binding.get("selected_checkpoint_update")) is int
+                        and selection_binding["selected_checkpoint_update"] in deferred_policy["candidate_updates"]
+                    )
+                )
+                and (
+                    not is_fast_binding
+                    or (
+                        protocol_id == "independent-mcq-current-last-block-2026-10-v4"
+                        and deferred_policy is None
+                        and FAST_SELECTION_BINDING_FIELDS <= set(selection_binding)
+                        and all(isinstance(selection_binding.get(key), str) and len(selection_binding[key]) == 64
+                                for key in (
+                                    "fast_manifest_sha256", "fast_selection_sha256", "fast_metrics_sha256",
+                                    "fast_candidate_index_sha256",
+                                ))
+                        and type(selection_binding.get("selected_checkpoint_update")) is int
+                        and selection_binding.get("selected_checkpoint_update") in {0, 360, 720, 1080, 1438}
+                        and type(selection_binding.get("training_max_tokens")) is int
+                        and type(selection_binding.get("evaluation_input_limit_tokens")) is int
+                        and selection_binding.get("evaluation_input_limit_tokens") == protocol.get("inference", {}).get("input_limit_tokens")
+                        and 0 < selection_binding.get("evaluation_input_limit_tokens") <= selection_binding.get("training_max_tokens")
+                        and not (deferred_binding_fields - {"selected_checkpoint_update"}) & set(selection_binding)
+                    )
+                )
+            )
+        else:
+            binding_valid = isinstance(selection_binding, dict) and set(selection_binding) == required_binding_fields
+        if not binding_valid or selection_binding.get("kind") not in {"completed-development-report", FAST_SELECTION_BINDING_KIND}:
             raise BlindEvaluationError("protocol_selection_binding_invalid")
     if (
         protocol.get("schema_version") != "blind-external-evaluation-protocol-v1"
@@ -179,7 +265,8 @@ def _load_protocol(path: Path = PROTOCOL_PATH) -> tuple[dict[str, Any], str]:
         or protocol.get("scoring", {}).get("no_temperature_scaling_or_calibration") is not True
         or protocol.get("scoring", {}).get("no_hyperparameter_or_prompt_tuning") is not True
         or protocol.get("scoring", {}).get("no_per_item_predictions_or_errors_in_reports") is not True
-        or protocol.get("scoring", {}).get("publish_aggregate_only_after_both_candidates_complete") is not True
+        or protocol.get("scoring", {}).get("publish_aggregate_only_after_all_locked_candidates_complete",
+                                            protocol.get("scoring", {}).get("publish_aggregate_only_after_both_candidates_complete")) is not True
         or protocol.get("scoring", {}).get("probabilities")
         != "Softmax over valid masked choice logits; no temperature scaling or calibration."
         or protocol.get("scoring", {}).get("negative_log_likelihood")
@@ -190,6 +277,19 @@ def _load_protocol(path: Path = PROTOCOL_PATH) -> tuple[dict[str, Any], str]:
         != "Per-item expected accuracy 1/K, NLL log(K), and multiclass Brier score 1 - 1/K for K valid choices; aggregate by the same source slices."
     ):
         raise BlindEvaluationError("protocol_contract_invalid")
+    if protocol_id in SNAPSHOT_BOUND_PROTOCOL_IDS:
+        required_snapshot_hashes = (
+            "training_snapshot_manifest_sha256", "training_snapshot_rows_sha256",
+            "training_snapshot_splits_sha256", "overlap_audit_report_sha256",
+        )
+        if (
+            not isinstance(protocol.get("training_snapshot_path"), str)
+            or any(not isinstance(protocol.get(key), str) or len(protocol[key]) != 64 for key in required_snapshot_hashes)
+            or protocol.get("scoring", {}).get("publish_aggregate_only_after_all_locked_candidates_complete") is not True
+        ):
+            raise BlindEvaluationError("protocol_snapshot_binding_invalid")
+    elif deferred_policy is not None:
+        raise BlindEvaluationError("protocol_deferred_development_contract_invalid")
     return protocol, _sha256(path)
 
 
@@ -206,6 +306,26 @@ def _validate_system_bundle(protocol: Mapping[str, Any]) -> tuple[dict[str, Any]
         or lock.get("training_snapshot_manifest_sha256") != protocol.get("training_snapshot_manifest_sha256")
     ):
         raise BlindEvaluationError("system_test_lock_contract_invalid")
+    if protocol.get("protocol_id") in SNAPSHOT_BOUND_PROTOCOL_IDS:
+        from evaluation.snapshot_bound_protocol import validate_snapshot_bound_lock
+
+        snapshot_path = _repo_directory(protocol["training_snapshot_path"], "training_snapshot_path_invalid")
+        binding = lock.get("snapshot_binding")
+        audit = lock.get("overlap_audit")
+        if (
+            not isinstance(binding, Mapping)
+            or binding.get("path") != protocol.get("training_snapshot_path")
+            or binding.get("manifest_sha256") != protocol.get("training_snapshot_manifest_sha256")
+            or binding.get("rows_sha256") != protocol.get("training_snapshot_rows_sha256")
+            or binding.get("splits_sha256") != protocol.get("training_snapshot_splits_sha256")
+            or not isinstance(audit, Mapping)
+            or audit.get("report_sha256") != protocol.get("overlap_audit_report_sha256")
+        ):
+            raise BlindEvaluationError("system_test_snapshot_binding_mismatch")
+        try:
+            validate_snapshot_bound_lock(lock, snapshot_path, lock_path, project_root=ROOT)
+        except ValueError:
+            raise BlindEvaluationError("system_test_snapshot_binding_mismatch") from None
     files = lock.get("files")
     if not isinstance(files, dict):
         raise BlindEvaluationError("system_test_lock_files_invalid")
@@ -289,11 +409,37 @@ def _selected_candidate(arm: str, run_path: Path, protocol: Mapping[str, Any]) -
         raise BlindEvaluationError("candidate_run_path_mismatch")
     run_manifest_path = run_path / "manifest.json"
     report_path = run_path / "report.json"
-    if run_manifest_path.is_symlink() or report_path.is_symlink():
+    if run_manifest_path.is_symlink():
         raise BlindEvaluationError("candidate_run_metadata_symlinked")
     run_manifest = _read_object(run_manifest_path, "candidate_run_manifest_invalid")
-    report = _read_object(report_path, "candidate_run_report_invalid")
+    selection_binding = protocol.get("selection_binding")
+    if isinstance(selection_binding, Mapping) and selection_binding.get("kind") == FAST_SELECTION_BINDING_KIND:
+        try:
+            report_path = _repo_file(selection_binding.get("fast_selection_path", ""), "candidate_fast_selection_invalid")
+        except BlindEvaluationError:
+            raise
+        selection_record = _read_object(report_path, "candidate_fast_selection_invalid")
+        report = {
+            "status": "completed",
+            "arm": arm,
+            "selected_checkpoint_reload_verified": selection_record.get("selected_checkpoint_reload_verified"),
+            "best_checkpoint_relative": selection_binding.get("best_checkpoint_relative"),
+            "selected_checkpoint_development": {
+                "selection_kind": FAST_SELECTION_BINDING_KIND,
+                "selection_update": selection_record.get("update"),
+                "selection_manifest_sha256": selection_record.get("selection_manifest_sha256"),
+            },
+        }
+    else:
+        if report_path.is_symlink():
+            raise BlindEvaluationError("candidate_run_metadata_symlinked")
+        report = _read_object(report_path, "candidate_run_report_invalid")
     model_spec = protocol.get("model_id"), protocol.get("model_revision")
+    fast_binding = isinstance(selection_binding, Mapping) and selection_binding.get("kind") == FAST_SELECTION_BINDING_KIND
+    training_max_tokens = (
+        selection_binding.get("training_max_tokens") if fast_binding
+        else protocol["inference"]["input_limit_tokens"]
+    )
     if (
         run_manifest.get("schema_version") != 2
         or run_manifest.get("arm") != arm
@@ -303,7 +449,7 @@ def _selected_candidate(arm: str, run_path: Path, protocol: Mapping[str, Any]) -
         or run_manifest.get("formatter") != protocol["prompt_format"]["id"]
         or run_manifest.get("pooling") != protocol["inference"]["pooling"]
         or run_manifest.get("capacity") != protocol["inference"]["choice_head_capacity"]
-        or run_manifest.get("max_tokens") != protocol["inference"]["input_limit_tokens"]
+        or run_manifest.get("max_tokens") != training_max_tokens
         or run_manifest.get("device") != "cuda"
         or run_manifest.get("attention_backend") != protocol["inference"]["attention_backend"]
         or run_manifest.get("parameters_dtype") != protocol["inference"]["parameters_dtype"]
@@ -319,7 +465,6 @@ def _selected_candidate(arm: str, run_path: Path, protocol: Mapping[str, Any]) -
     if not isinstance(relative, str) or not relative:
         raise BlindEvaluationError("candidate_selected_checkpoint_missing")
     relative_path = PurePosixPath(relative)
-    selection_binding = protocol.get("selection_binding")
     if relative_path.is_absolute():
         raise BlindEvaluationError("candidate_selected_checkpoint_path_invalid")
     if selection_binding is None:
@@ -336,6 +481,14 @@ def _selected_candidate(arm: str, run_path: Path, protocol: Mapping[str, Any]) -
     else:
         if protocol.get("run_paths", {}).keys() != {arm} or relative != selection_binding.get("best_checkpoint_relative"):
             raise BlindEvaluationError("candidate_selected_checkpoint_binding_mismatch")
+        if protocol.get("protocol_id") in SNAPSHOT_BOUND_PROTOCOL_IDS:
+            active_path = selection_binding.get("active_run_manifest_path")
+            if (
+                not isinstance(active_path, str)
+                or _repo_file(active_path, "candidate_active_run_manifest_invalid").resolve() != run_manifest_path.resolve()
+                or selection_binding.get("run_manifest_sha256") != _sha256(run_manifest_path)
+            ):
+                raise BlindEvaluationError("candidate_active_run_manifest_mismatch")
         expected_relative = selection_binding.get("selected_checkpoint_path")
         if not isinstance(expected_relative, str):
             raise BlindEvaluationError("candidate_selected_checkpoint_binding_invalid")
@@ -379,7 +532,7 @@ def _selected_candidate(arm: str, run_path: Path, protocol: Mapping[str, Any]) -
         or manifest_copy.get("repo") != model_spec[0]
         or manifest_copy.get("revision") != model_spec[1]
         or manifest_copy.get("formatter") != protocol["prompt_format"]["id"]
-        or manifest_copy.get("max_tokens") != protocol["inference"]["input_limit_tokens"]
+        or manifest_copy.get("max_tokens") != training_max_tokens
         or checkpoint_manifest.get("include_backbone") is not (arm in {"full", "last-block"})
         or not isinstance(files, dict)
         or not any(name.startswith("tokenizer/") for name in files)
@@ -397,6 +550,43 @@ def _selected_candidate(arm: str, run_path: Path, protocol: Mapping[str, Any]) -
         if manifest_copy.get(field) != checkpoint_source_manifest.get(field):
             raise BlindEvaluationError("candidate_checkpoint_run_manifest_mismatch")
     _verify_checkpoint_files(checkpoint_dir, files)
+    backbone_state_kind = checkpoint_manifest.get("backbone_state_kind", "full")
+    base_checkpoint_binding = None
+    if backbone_state_kind == "trainable-overlay-v1":
+        from evaluation.snapshot_bound_protocol import validate_compact_checkpoint_binding
+
+        try:
+            base_checkpoint_binding = validate_compact_checkpoint_binding(
+                ROOT, checkpoint_dir, checkpoint_manifest, checkpoint_source_manifest,
+                verify_base_backbone=True,
+            )
+        except (OSError, ValueError):
+            raise BlindEvaluationError("candidate_checkpoint_base_binding_invalid") from None
+        if (
+            not isinstance(selection_binding, Mapping)
+            or selection_binding.get("base_checkpoint_binding") != base_checkpoint_binding
+        ):
+            raise BlindEvaluationError("candidate_checkpoint_base_binding_mismatch")
+    elif backbone_state_kind == "full":
+        if (
+            checkpoint_manifest.get("base_checkpoint") not in (None, {})
+            or checkpoint_manifest.get("backbone_parameter_names") not in (None, [])
+            or protocol.get("protocol_id") == "independent-mcq-current-last-block-2026-10-v4"
+        ):
+            raise BlindEvaluationError("candidate_checkpoint_storage_contract_invalid")
+    else:
+        raise BlindEvaluationError("candidate_checkpoint_storage_contract_invalid")
+    architecture = checkpoint_source_manifest.get("head_architecture", "last-token-linear-v1")
+    expects_attention = protocol.get("protocol_id") == "independent-mcq-current-option-attention-2026-10-v1"
+    if architecture != ("option-context-attention-v1" if expects_attention else "last-token-linear-v1"):
+        raise BlindEvaluationError("candidate_head_architecture_invalid")
+    if expects_attention:
+        for field in ("head_architecture", "head_attention_size", "option_span_metadata", "attention_head_sha256"):
+            if (manifest_copy.get(field) != checkpoint_source_manifest.get(field)
+                    or run_manifest.get(field) != checkpoint_source_manifest.get(field)):
+                raise BlindEvaluationError("candidate_head_architecture_binding_invalid")
+        if checkpoint_source_manifest.get("head_attention_size") != 256:
+            raise BlindEvaluationError("candidate_head_attention_size_invalid")
     if arm == "last-block":
         config = _read_object(checkpoint_dir / "backbone_config" / "config.json", "candidate_checkpoint_config_invalid")
         layer_count = config.get("num_hidden_layers")
@@ -419,6 +609,39 @@ def _selected_candidate(arm: str, run_path: Path, protocol: Mapping[str, Any]) -
     tokenizer_hashes = {name: digest for name, digest in files.items() if name.startswith("tokenizer/")}
     if not tokenizer_hashes:
         raise BlindEvaluationError("candidate_checkpoint_tokenizer_missing")
+    from evaluation.snapshot_bound_protocol import validate_deferred_development_selection
+
+    try:
+        deferred_binding = validate_deferred_development_selection(
+            ROOT,
+            run_path,
+            run_manifest,
+            report,
+            checkpoint_dir,
+            system_test_manifest_sha256=protocol.get("system_test_lock_sha256"),
+        )
+    except (OSError, TypeError, ValueError, KeyError):
+        raise BlindEvaluationError("candidate_deferred_development_binding_invalid") from None
+    deferred_policy = protocol.get("development_execution")
+    if deferred_binding is None:
+        if deferred_policy is not None or (
+            isinstance(selection_binding, Mapping) and any(
+                key in selection_binding for key in {
+                    "deferred_selection_sha256", "deferred_candidate_index_sha256", "selected_checkpoint_update",
+                }
+            ) and selection_binding.get("kind") != FAST_SELECTION_BINDING_KIND
+        ):
+            raise BlindEvaluationError("candidate_deferred_development_binding_mismatch")
+    elif (
+        deferred_policy != deferred_binding["development_execution"]
+        or not isinstance(selection_binding, Mapping)
+        or any(selection_binding.get(key) != deferred_binding[value] for key, value in (
+            ("deferred_selection_sha256", "deferred_selection_sha256"),
+            ("deferred_candidate_index_sha256", "deferred_candidate_index_sha256"),
+            ("selected_checkpoint_update", "selected_checkpoint_update"),
+        ))
+    ):
+        raise BlindEvaluationError("candidate_deferred_development_binding_mismatch")
     return {
         "arm": arm,
         "run_path": run_path.relative_to(ROOT).as_posix(),
@@ -441,6 +664,12 @@ def _selected_candidate(arm: str, run_path: Path, protocol: Mapping[str, Any]) -
         "attention_backend": run_manifest["attention_backend"],
         "threads": run_manifest["threads"],
         "gpu_allocation_cap_gib": run_manifest.get("gpu_allocation_cap_gib"),
+        "head_architecture": architecture,
+        "backbone_state_kind": backbone_state_kind,
+        "base_checkpoint_binding": base_checkpoint_binding,
+        "deferred_selection_sha256": deferred_binding.get("deferred_selection_sha256") if deferred_binding else None,
+        "deferred_candidate_index_sha256": deferred_binding.get("deferred_candidate_index_sha256") if deferred_binding else None,
+        "selected_checkpoint_update": deferred_binding.get("selected_checkpoint_update") if deferred_binding else None,
     }
 
 
@@ -577,8 +806,76 @@ def _verify_selection_binding(
         "checkpoint_source_run_manifest_path": candidate.get("checkpoint_source_run_manifest_path"),
         "checkpoint_source_run_manifest_sha256": candidate.get("checkpoint_source_run_manifest_sha256"),
     }
-    if binding.get("kind") != "completed-development-report" or any(binding.get(key) != value for key, value in checks.items()):
+    if protocol.get("development_execution") is not None:
+        checks.update({
+            "deferred_selection_sha256": candidate.get("deferred_selection_sha256"),
+            "deferred_candidate_index_sha256": candidate.get("deferred_candidate_index_sha256"),
+            "selected_checkpoint_update": candidate.get("selected_checkpoint_update"),
+        })
+    elif any(key in binding for key in (
+        "deferred_selection_sha256", "deferred_candidate_index_sha256", "selected_checkpoint_update",
+    )):
+        if binding.get("kind") != FAST_SELECTION_BINDING_KIND:
+            raise BlindEvaluationError("protocol_selection_binding_invalid")
+    binding_kind = binding.get("kind")
+    if binding_kind not in {"completed-development-report", FAST_SELECTION_BINDING_KIND} or any(
+        binding.get(key) != value for key, value in checks.items()
+    ):
         raise BlindEvaluationError("candidate_development_selection_binding_mismatch")
+    if binding_kind == FAST_SELECTION_BINDING_KIND:
+        try:
+            from evaluation.snapshot_bound_protocol import validate_fast_development_selection
+
+            evidence = validate_fast_development_selection(
+                ROOT,
+                binding["fast_manifest_path"],
+                binding["fast_selection_path"],
+                snapshot=protocol["training_snapshot_path"],
+                lock_path=protocol["system_test_lock_path"],
+                verify_checkpoint_artifacts=False,
+                verify_base_backbone=False,
+            )
+        except (OSError, TypeError, ValueError, KeyError):
+            raise BlindEvaluationError("candidate_fast_selection_binding_invalid") from None
+        expected_fast = {
+            "fast_manifest_path": evidence["manifest_path"],
+            "fast_manifest_sha256": evidence["manifest_sha256"],
+            "fast_selection_path": evidence["selection_path"],
+            "fast_selection_sha256": evidence["selection_sha256"],
+            "fast_metrics_path": evidence["metrics_path"],
+            "fast_metrics_sha256": evidence["metrics_sha256"],
+            "fast_candidate_index_path": evidence["candidate_index_path"],
+            "fast_candidate_index_sha256": evidence["candidate_index_sha256"],
+            "selected_checkpoint_update": evidence["selected_update"],
+            "training_max_tokens": evidence["source_run_manifest"].get("max_tokens"),
+            "evaluation_input_limit_tokens": protocol.get("inference", {}).get("input_limit_tokens"),
+        }
+        expected_candidate = {
+            "checkpoint_path": evidence["selected_checkpoint_path"],
+            "checkpoint_manifest_sha256": evidence["checkpoint_manifest_sha256"],
+            "checkpoint_source_run_manifest_path": evidence["source_run_manifest_path"],
+            "checkpoint_source_run_manifest_sha256": evidence["source_run_manifest_sha256"],
+            "base_checkpoint_binding": evidence["base_checkpoint_binding"],
+        }
+        selection_record_path = _repo_file(binding["fast_selection_path"], "candidate_fast_selection_invalid")
+        selection_record = _read_object(selection_record_path, "candidate_fast_selection_invalid")
+        if (
+            any(binding.get(key) != value for key, value in expected_fast.items())
+            or any(candidate.get(key) != value for key, value in expected_candidate.items())
+            or candidate.get("run_report_path") != evidence["selection_path"]
+            or candidate.get("run_report_sha256") != evidence["selection_sha256"]
+            or selection_record.get("selected_checkpoint_reload_verified") is not True
+        ):
+            raise BlindEvaluationError("candidate_fast_selection_binding_mismatch")
+        return {
+            "kind": FAST_SELECTION_BINDING_KIND,
+            "path": evidence["selection_path"],
+            "sha256": evidence["selection_sha256"],
+            "fast_manifest_path": evidence["manifest_path"],
+            "fast_manifest_sha256": evidence["manifest_sha256"],
+            "selected_checkpoint_update": evidence["selected_update"],
+        }
+
     report_path = _repo_file(binding["report_path"], "candidate_run_report_invalid")
     report = _read_object(report_path, "candidate_run_report_invalid")
     if report.get("status") != "completed" or report.get("selected_checkpoint_reload_verified") is not True:
@@ -593,9 +890,14 @@ def _verify_selection_binding(
 def _evaluation_code_hashes(protocol_path: Path) -> dict[str, str]:
     paths = (
         Path("evaluation/blind_runner.py"),
+        Path("evaluation/snapshot_bound_protocol.py"),
+        Path("evaluation/isolation.py"),
         protocol_path.relative_to(ROOT),
+        Path("attention_head.py"),
         Path("experiment.py"),
+        Path("paired_training.py"),
         Path("scalable_training.py"),
+        Path("training_loop.py"),
         Path("training_checkpoint.py"),
     )
     result = {}
@@ -1117,7 +1419,50 @@ def _load_tokenizer(candidate: Mapping[str, Any]):
     return torch, tokenizer
 
 
-def _load_model(candidate: Mapping[str, Any], protocol: Mapping[str, Any]):
+def _wait_for_model_memory(model_bytes: int, candidate: Mapping[str, Any], status_path: Path, torch: Any) -> bool:
+    from paired_training import require_memory
+    from training_loop import wait_for_resources
+
+    def check():
+        return require_memory(model_bytes, 12, "cuda")
+
+    def release_cache() -> None:
+        import gc
+
+        gc.collect()
+        torch.cuda.empty_cache()
+
+    def publish(snapshot: Mapping[str, Any], waiting: bool) -> None:
+        gib = 1024**3
+        keys = (
+            "host_available_bytes", "driver_free_bytes", "device_total_bytes",
+            "device_allocated_bytes", "device_reserved_bytes", "process_cap_headroom_bytes",
+        )
+        memory = {
+            key.removesuffix("_bytes"): round(value / gib, 2)
+            for key in keys
+            if type(value := snapshot.get(key)) is int and value >= 0
+        }
+        _atomic_json(status_path, {
+            "phase": "waiting_for_model_memory" if waiting else "model_memory_available",
+            "candidate": candidate["arm"],
+            "memory_waiting": waiting,
+            "model_memory_gib": round(model_bytes / gib, 2),
+            "reserve_gib": 12,
+            "memory": memory,
+            "updated_at_utc": _now(),
+        }, private=True)
+
+    return wait_for_resources(
+        check,
+        stop=_EvaluationStopSignal(),
+        release_cache=release_cache,
+        publish=publish,
+        poll_seconds=30,
+    )
+
+
+def _load_model(candidate: Mapping[str, Any], protocol: Mapping[str, Any], *, status_path: Path | None = None):
     import torch
     import transformers
     from transformers import AutoModel
@@ -1147,11 +1492,17 @@ def _load_model(candidate: Mapping[str, Any], protocol: Mapping[str, Any]):
     except Exception:
         raise BlindEvaluationError("selected_checkpoint_config_load_failed") from None
     try:
-        from paired_training import require_memory
+        if protocol.get("protocol_id") in SNAPSHOT_BOUND_PROTOCOL_IDS:
+            if status_path is None or not _wait_for_model_memory(model_bytes, candidate, status_path, torch):
+                raise BlindEvaluationError("evaluation_stopped_waiting_for_memory")
+        else:
+            from paired_training import require_memory
 
-        require_memory(model_bytes, 12, device)
+            require_memory(model_bytes, 12, device)
+    except BlindEvaluationError:
+        raise
     except Exception:
-        raise BlindEvaluationError("locked_gpu_memory_reserve_unavailable")
+        raise BlindEvaluationError("locked_gpu_memory_reserve_unavailable") from None
     try:
         backbone = AutoModel.from_pretrained(
             candidate["model_id"], revision=candidate["model_revision"], local_files_only=True,
@@ -1163,8 +1514,9 @@ def _load_model(candidate: Mapping[str, Any], protocol: Mapping[str, Any]):
     backbone.requires_grad_(False)
     backbone.eval()
 
-    from experiment import DecisionHead
-    head = DecisionHead(backbone.config.hidden_size, protocol["inference"]["choice_head_capacity"]).to(device)
+    from attention_head import make_head
+    head = make_head(backbone.config.hidden_size, candidate.get("head_architecture", "last-token-linear-v1"),
+                     protocol["inference"]["choice_head_capacity"]).to(device)
     head.requires_grad_(False)
     restored = _load_locked_training_checkpoint(checkpoint_dir, backbone, head)
     if restored.get("manifest", {}).get("arm") != candidate["arm"]:
@@ -1201,7 +1553,8 @@ def _model_scorer(torch: Any, tokenizer: Any, backbone: Any, head: Any, protocol
         counts = torch.tensor([len(model_row["options"])], device=candidate["device"])
         try:
             with torch.inference_mode():
-                features = encode_batch(tokenizer, backbone, [model_row], args.max_tokens, candidate["device"], cache=None)
+                features = encode_batch(tokenizer, backbone, [model_row], args.max_tokens, candidate["device"], cache=None,
+                                        head_architecture=candidate.get("head_architecture", "last-token-linear-v1"))
                 logits = head(features, counts)
         except Exception:
             raise BlindEvaluationError("model_inference_failed") from None
@@ -1380,7 +1733,7 @@ def run_evaluation(
             continue
 
         torch, tokenizer = _load_tokenizer(candidates[arm])
-        torch, backbone, head = _load_model(candidates[arm], protocol)
+        torch, backbone, head = _load_model(candidates[arm], protocol, status_path=status_path)
         scorer = _model_scorer(torch, tokenizer, backbone, head, protocol, candidates[arm])
         state = _process_candidate_items(
             items_path,
@@ -1428,6 +1781,7 @@ def run_evaluation(
 def _request_stop(_signum: int, _frame: Any) -> None:
     global _STOP_REQUESTED
     _STOP_REQUESTED = True
+    _STOP_EVENT.set()
 
 
 def _parse_args() -> argparse.Namespace:
@@ -1444,6 +1798,9 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    global _STOP_REQUESTED
+    _STOP_REQUESTED = False
+    _STOP_EVENT.clear()
     signal.signal(signal.SIGTERM, _request_stop)
     signal.signal(signal.SIGINT, _request_stop)
     args = _parse_args()

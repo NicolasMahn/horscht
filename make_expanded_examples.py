@@ -8,12 +8,14 @@ import json
 import random
 from pathlib import Path
 
+from make_examples import make_examples
+
 
 ROOT = Path(__file__).resolve().parent
 
 
 def make_expanded_examples():
-    original = json.loads((ROOT / "data" / "smoke.json").read_text())
+    original = make_examples()
     examples = [dict(example, train_subset_16=True) for example in original
                 if example["split"] == "train"]
     rng = random.Random(20260928)

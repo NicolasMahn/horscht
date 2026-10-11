@@ -42,6 +42,8 @@ license and source-specific document licenses; see [NOTICE](NOTICE) and the
 release cards before reuse. Benchmark content and sealed internal test data
 are not included.
 
+Horscht v0.1 carries a non-commercial-use policy because its training included SciQ data licensed CC-BY-NC-3.0. A potential future version would replace non-commercial training sources and retrain from a checkpoint that predates them, with the aim of releasing our original contributions under MIT for commercial as well as non-commercial use. Qwen3-4B's Apache-2.0 license and other applicable third-party obligations would remain in place. This is a future direction, not a license change or a promise of a new release.
+
 For the research environment:
 
 ```sh

@@ -1,0 +1,13 @@
+{
+  "updated_at": "2026-10-11T21:04:45.960532+00:00",
+  "repo_id": "NicolasMahn/horscht-qwen3-4b-v0.1",
+  "revision": "ec92169a82bdd1a2438a01901179def7971eb2d9",
+  "files": {
+    "README.md": {
+      "sha256": "c2cd1d3f76b5e9aaf6d663f820946045352c9feab9c39d23142563dabfad34ab",
+      "bytes": 11233
+    }
+  },
+  "anonymous_readback_verified": true,
+  "scope": "Model card clarification only; model weights and current license unchanged. Original publication receipts remain pinned to the initial release."
+}

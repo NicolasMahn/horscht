@@ -111,4 +111,6 @@ This command proves that the private full warm-start file is replaceable by upst
 
 See `LICENSE`, `LICENSE_CODE`, `LICENSE_QWEN`, and `NOTICE`. Original project software is MIT; original model/data contributions by Nicolas are CC-BY-4.0; Qwen's upstream weights are Apache-2.0. This release carries a **noncommercial-use policy because SciQ training data is CC-BY-NC-3.0**. Document and other source rights remain source-specific; this repository does not blanket-relicense third-party material. Review the associated dataset's attribution and source license records before redistribution or derivative use.
 
+Horscht v0.1 carries a non-commercial-use policy because its training included SciQ data licensed CC-BY-NC-3.0. A potential future version would replace non-commercial training sources and retrain from a checkpoint that predates them, with the aim of releasing our original contributions under MIT for commercial as well as non-commercial use. Qwen3-4B's Apache-2.0 license and other applicable third-party obligations would remain in place. This is a future direction, not a license change or a promise of a new release.
+
 [Training data](https://huggingface.co/datasets/NicolasMahn/horscht-decisions-v0.1) · [Paper](https://nicolasmahn.github.io/horscht/paper.html) · [Source code](https://github.com/NicolasMahn/horscht)

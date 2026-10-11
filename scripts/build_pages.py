@@ -112,7 +112,8 @@ def landing_page(current):
 <div class="panel metrics"><div><span class="label">External suite accuracy</span><span class="number">{current['overall']['accuracy']:.2%}</span><span class="note">17,874 questions · exploratory</span></div><div><span class="label">Trainable parameters</span><span class="number">101.6M</span><span class="note">Final block + 265-output head</span></div><div><span class="label">Continuation training rows</span><span class="number">23,006</span><span class="note">An addition to earlier training</span></div></div>
 <p>The continuation improves on its previous checkpoint across MMLU-Pro, Belebele and six BBH tasks. The original Qwen3-4B immediate-answer reference still leads on overall accuracy. The external suite has been reused; these results describe an experiment, rather than an untouched final test.</p>
 <div class="links"><a href="benchmark.html">Benchmark results →</a><a href="comparison.html">Compare with other decision models →</a><a href="{REPOSITORY}">GitHub source →</a></div>
-<p class="note">The published mixture includes source-specific licenses, including noncommercial material. Read the dataset card before reuse.</p>''')
+<p class="note">The published mixture includes source-specific licenses, including noncommercial material. Read the dataset card before reuse.</p>
+<p class="note">Horscht v0.1 carries a non-commercial-use policy because its training included SciQ data licensed CC-BY-NC-3.0. A potential future version would replace non-commercial training sources and retrain from a checkpoint that predates them, with the aim of releasing our original contributions under MIT for commercial as well as non-commercial use. Qwen3-4B's Apache-2.0 license and other applicable third-party obligations would remain in place. This is a future direction, not a license change or a promise of a new release.</p>''')
 
 
 def benchmark_page(results):

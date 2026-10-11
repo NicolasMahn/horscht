@@ -9,6 +9,7 @@ Earlier transformer blocks remain frozen. This release keeps Qwen3-4B: it
 outperformed Qwen3.5-4B in our original small, template-bound comparison.
 That early result is not a general ranking of those backbones.
 
+- [Public website](https://nicolasmahn.github.io/horscht/) · [Hugging Face model](https://huggingface.co/NicolasMahn/horscht-qwen3-4b-v0.1) · [Hugging Face dataset](https://huggingface.co/datasets/NicolasMahn/horscht-decisions-v0.1)
 - [Technical paper](docs/paper/paper.md) and [HTML report](docs/paper/paper.html)
 - [Model release and inference](release/model/README.md)
 - [Dataset release and provenance](release/dataset/README.md)

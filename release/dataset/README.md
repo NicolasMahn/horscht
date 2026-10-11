@@ -93,8 +93,7 @@ raw values remain intact and training normalizes at the tensor boundary.
 ```python
 from datasets import load_dataset
 
-# Replace the repository ID with this dataset's published ID.
-data = load_dataset("OWNER/HORSCHT-DATA", "continuation")
+data = load_dataset("NicolasMahn/horscht-decisions-v0.1", "continuation")
 ```
 
 `manifest.json` records exact counts, source-specific license counts, original
@@ -141,3 +140,5 @@ overlaps against the project's external evaluation suite; it cannot exclude
 semantic overlap or base-model pretraining contamination. The mixture includes
 SciQ and Banking77 native train data, so evaluation on those dataset families
 requires explicit independent split and overlap checks.
+
+[Model](https://huggingface.co/NicolasMahn/horscht-qwen3-4b-v0.1) · [Paper](https://nicolasmahn.github.io/horscht/paper.html) · [Source code](https://github.com/NicolasMahn/horscht)

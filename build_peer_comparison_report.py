@@ -1,7 +1,7 @@
 """Build a dated, source-linked peer review from aggregate evidence only."""
 from html import escape
 from pathlib import Path
-from build_benchmark_report import RESULTS, RUN, grouped, read
+from build_benchmark_report import grouped, read
 from report_theme import PALETTE
 
 ROOT = Path(__file__).resolve().parent
@@ -24,9 +24,9 @@ def cite(key):
     return f'<a href="{escape(url)}">{escape(title)}</a>'
 
 
-def build():
-    current = read(RESULTS / 'new-data-last-block-fast-2026-10-09/blind-aggregate-result.json')['candidate_results']['last-block']
-    original = read(RESULTS / 'original-qwen-label-likelihood-2026-10-04/blind-aggregate-result.json')
+def build(output=OUTPUT, *, public_links=False):
+    current = read(ROOT / 'release/evidence/horscht-v0.1.json')
+    original = read(ROOT / 'release/evidence/original-qwen3-4b-immediate-answer.json')
     mmlu = grouped(current, 'mmlu-')
     rows = ''.join(f'<tr><th>{name}</th><td>{grouped(current, prefix)["accuracy"]:.2%}</td><td>{grouped(original, prefix)["accuracy"]:.2%}</td><td>{grouped(current, prefix)["examples"]:,}</td></tr>'
                    for name, prefix in [('MMLU-Pro', 'mmlu-'), ('Belebele · five languages', 'belebele-'), ('BBH · six tasks', 'bbh-')])
@@ -41,7 +41,7 @@ def build():
 nav{{display:flex;justify-content:space-between;gap:16px;font-size:14px;color:var(--muted);margin-bottom:40px}}h1{{font-size:clamp(30px,4vw,46px);line-height:1.12;letter-spacing:-.035em;max-width:870px;margin:12px 0 20px}}h2{{font-size:23px;letter-spacing:-.02em;margin:0 0 14px}}p,li{{line-height:1.65}}.intro{{max-width:880px;font-size:18px}}.muted,small{{color:var(--muted)}}.kicker{{font-size:13px;color:var(--muted)}}
 .cards{{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:28px 0}}.card,section,details{{border:1px solid var(--border);background:var(--surface);border-radius:16px}}.card{{padding:22px}}.number{{display:block;font-weight:750;font-size:38px;letter-spacing:-.04em;margin:8px 0;color:var(--local)}}.card p{{font-size:13px;color:var(--muted);margin:0}}section{{padding:26px;margin:20px 0}}.scroll{{overflow-x:auto}}table{{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}}th,td{{text-align:left;vertical-align:top;border-bottom:1px solid var(--border);padding:16px 12px;line-height:1.5}}thead th{{font-size:12px;color:var(--muted)}}tbody tr:last-child>*{{border-bottom:0}}th:first-child,td:first-child{{padding-left:0}}.numeric td{{white-space:nowrap}}small{{display:block;font-size:12px;margin-top:6px;font-weight:400}}.note{{font-size:13px;color:var(--muted)}}.callout{{border-left:3px solid var(--caution);padding:0 18px;margin:24px 0}}.tag{{font-size:12px;color:var(--published);font-weight:650}}details{{padding:0 24px;margin:14px 0}}summary{{padding:21px 0;font-weight:650;cursor:pointer}}details p,details li{{font-size:14px}}footer{{font-size:12px;color:var(--muted);line-height:1.7;margin-top:28px}}li{{margin:10px 0}}
 @media(max-width:700px){{main{{padding:24px 16px}}nav{{flex-wrap:wrap}}.cards{{grid-template-columns:1fr}}section{{padding:18px}}.peers{{min-width:820px}}.numeric{{min-width:550px}}.card{{padding:16px}}}}
-</style><main><nav><a href="/runs/new-data-last-block-2026-10-08/fast-evaluation-003/benchmark-report.html">← Our benchmark results</a><span>Research snapshot · 2026-10-09</span></nav>
+</style><main><nav><a href="benchmark.html">← Our benchmark results</a><span>Research snapshot · 2026-10-09</span></nav>
 <div class="kicker">Horscht · Qwen3-4B · selected update 1080</div>
 <h1>The 4B field sets a higher target.</h1>
 <p class="intro">Our latest model improves on our previous checkpoint, but published results suggest there is substantial room left at this size. <strong>Mica and Kev are the most useful immediate comparisons.</strong> Their higher reported scores are a reason to test them in our harness, not a measured head-to-head defeat.</p>
@@ -78,10 +78,21 @@ nav{{display:flex;justify-content:space-between;gap:16px;font-size:14px;color:va
 <p>Our combined result is <strong>{current['overall']['accuracy']:.2%}</strong>, versus <strong>{original['overall']['accuracy']:.2%}</strong> for the original immediate-answer reference. We have not yet beaten that reference across this suite. Our 85.40% Belebele result is encouraging, but does not establish a lead over peers we have not tested here.</p><p class="note">The original reference uses a different readout. Neither local column generates a thinking trace. BBH covers six tasks, not the complete benchmark; Belebele covers five languages. The combined score is weighted by our question counts and must not be compared with Decision Index or JEVal composites.</p></section>
 <section><h2>What I would compare next</h2><ol><li><strong>Mica and Kev, against this frozen checkpoint.</strong> Evaluate the same questions, preserve each model’s documented decision interface, and record rejected inputs separately. Start with MMLU-Pro, then expand if runtime is reasonable.</li><li><strong>A no-training Qwen3.5-4B decision readout.</strong> The LLM2Jev paper reports that an untrained 4B readout can match community decision models. This is the necessary control before crediting a newer backbone’s gains to training. {cite('llm')}</li><li><strong>ImaJev when image decisions become a priority; InnerJev when testing reasoning distillation.</strong> Both are useful recipe comparisons, but changing backbone, data and head together would not tell us which change helped.</li></ol><p class="note">Recommendation only: this report has not started model downloads, training or new benchmark jobs. A fair latency comparison also needs the same hardware, precision, input lengths, batching and warm-up policy; published milliseconds are not ranked against our AMD machine.</p></section>
 <details><summary>Where Clef and Jev fit</summary><p>Clef-Flash is <strong>9B</strong> on Qwen3.5; Clef is <strong>27B</strong> on Qwen3.8. Both use a joint transformer schema head and support multimodal inputs. They are larger reference systems, not our same-size peer group. {cite('flash')} · {cite('clef')}</p><p>Cloudflare reports MMLU-Pro accuracy of 65.3% for Clef-Flash, 65.9% for Clef and 82.7% for Jev in its Decision Index evaluation. Those are externally reported results under another protocol. Jev’s parameter count was not verified here, so it is not classified as a 4B peer. {cite('clef')}</p></details>
-<details><summary>Evidence, limitations and reproduction</summary><p>Research checked on 2026-10-09. External claims come from developer model cards or the linked research paper; none of the peer models was run locally for this report. Cards and releases can change. Kev’s own result and its older result in Mica’s table are deliberately kept separate.</p><p>Our current result is selected update 1080, following a 23,006-question continuation of an already trained checkpoint. This is not its complete lifetime training count. Selection used 128 development questions. The 17,874-question external suite has been observed before and is exploratory; the additional internal test remains deferred.</p><p>Only aggregate scores and public model metadata were inspected. Benchmark items remain evaluation-only. Our training mixture includes Banking77 and SciQ, so a future comparison using those sources needs explicit split and overlap checks. There is no claim of pretraining contamination being ruled out.</p><p>The existing local report verifies the aggregate file against its completion receipt. This report reads those same aggregate files directly. It contains no external scripts or chart dependencies.</p><p><a href="/runs/new-data-last-block-2026-10-08/fast-evaluation-003/benchmark-report.html">Local results and checkpoint details</a> · <a href="/runs/new-data-last-block-2026-10-08/fast-evaluation-003/benchmark-report.json">Completion receipt</a></p></details>
-<footer>Prepared for the Horscht experiment · 2026-10-09 · Source links accompany the relevant claims.<br><a href="/docs/paper/paper.html">Model paper</a> · <a href="/runs/project-record-2026-10-04.html">All experiment results</a></footer></main></html>'''
-    OUTPUT.write_text(html)
-    return OUTPUT
+<details><summary>Evidence, limitations and reproduction</summary><p>Research checked on 2026-10-09. External claims come from developer model cards or the linked research paper; none of the peer models was run locally for this report. Cards and releases can change. Kev’s own result and its older result in Mica’s table are deliberately kept separate.</p><p>Our current result is selected update 1080, following a 23,006-question continuation of an already trained checkpoint. This is not its complete lifetime training count. Selection used 128 development questions. The 17,874-question external suite has been observed before and is exploratory; the additional internal test remains deferred.</p><p>Only aggregate scores and public model metadata were inspected. Benchmark items remain evaluation-only. Our training mixture includes Banking77 and SciQ, so a future comparison using those sources needs explicit split and overlap checks. There is no claim of pretraining contamination being ruled out.</p><p>This report reads the public aggregate exports, which preserve source SHA-256 digests and omit benchmark content and host-specific execution paths. It contains no external scripts or chart dependencies.</p><p><a href="benchmark.html">Benchmark results and scope</a> · <a href="evidence/horscht-v0.1.json">Aggregate evidence</a></p></details>
+<footer>Prepared for the Horscht experiment · 2026-10-09 · Source links accompany the relevant claims.<br><a href="paper.html">Model paper</a> · <a href="https://github.com/nicolasmahn/horscht">Project source</a></footer></main></html>'''
+    if not public_links:
+        local_links = {
+            'benchmark.html': '/runs/new-data-last-block-2026-10-08/fast-evaluation-003/benchmark-report.html',
+            'evidence/horscht-v0.1.json': '/runs/new-data-last-block-2026-10-08/fast-evaluation-003/benchmark-report.json',
+            'paper.html': '/docs/paper/paper.html',
+            'https://github.com/nicolasmahn/horscht': '/runs/project-record-2026-10-04.html',
+        }
+        for public, local in local_links.items():
+            html = html.replace(f'href="{public}"', f'href="{local}"')
+    output = Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(html)
+    return output
 
 
 if __name__ == '__main__':

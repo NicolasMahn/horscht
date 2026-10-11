@@ -21,7 +21,14 @@ The download stores **replacement weights**, not additive deltas: 11 final-block
 
 ## Use
 
-Download this repository locally and install `requirements.txt`. The loader is ordinary Python source you can inspect; Transformers remote code is unnecessary.
+Download this repository locally and install `requirements.txt`:
+
+```sh
+hf download NicolasMahn/horscht-qwen3-4b-v0.1 --local-dir horscht-model
+cd horscht-model
+pip install -r requirements.txt
+```
+ The loader is ordinary Python source you can inspect; Transformers remote code is unnecessary.
 
 ```python
 import torch
@@ -103,3 +110,5 @@ python scripts/export_release_model.py \
 This command proves that the private full warm-start file is replaceable by upstream for inference, checks source artifact hashes, and serializes exact selected FP32 replacement values. It requires the original internal checkpoint and full warm-start file. Public inference needs neither. Exact retraining also requires the earlier warm-start run, immutable split registry, source snapshot, protocol amendments, and environment; publication of this inference artifact alone is not a claim that the complete two-stage training can be exactly reproduced from the model download.
 
 See `LICENSE`, `LICENSE_CODE`, `LICENSE_QWEN`, and `NOTICE`. Original project software is MIT; original model/data contributions by Nicolas are CC-BY-4.0; Qwen's upstream weights are Apache-2.0. This release carries a **noncommercial-use policy because SciQ training data is CC-BY-NC-3.0**. Document and other source rights remain source-specific; this repository does not blanket-relicense third-party material. Review the associated dataset's attribution and source license records before redistribution or derivative use.
+
+[Training data](https://huggingface.co/datasets/NicolasMahn/horscht-decisions-v0.1) · [Paper](https://nicolasmahn.github.io/horscht/paper.html) · [Source code](https://github.com/NicolasMahn/horscht)

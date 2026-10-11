@@ -23,3 +23,6 @@ release/dataset/**/*.parquet
 release/dataset/**/*.arrow
 release/dataset/**/*.zip
 !release/dataset/document-attribution.jsonl
+
+# Allowlisted GitHub Pages build output
+publicsite/_site/

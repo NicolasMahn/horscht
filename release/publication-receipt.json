@@ -1,0 +1,130 @@
+{
+  "namespace": "NicolasMahn",
+  "private": false,
+  "repositories": [
+    {
+      "type": "model",
+      "repo_id": "NicolasMahn/horscht-qwen3-4b-v0.1",
+      "revision": "550f678ee4346e8c7fa6d99a835ba127fe077b51",
+      "url": "https://huggingface.co/NicolasMahn/horscht-qwen3-4b-v0.1",
+      "files": {
+        "LICENSE": {
+          "bytes": 1503,
+          "sha256": "db145c5fbea1381e33f9ba0d46824cd31feb1b9d741e93c81a5ad18c890b2e51"
+        },
+        "LICENSE_CODE": {
+          "bytes": 1069,
+          "sha256": "5ba9eab53c428c790fbd1623ad4d3ecceeea30ea9d56c48b979f3c99c423ba5c"
+        },
+        "LICENSE_QWEN": {
+          "bytes": 11343,
+          "sha256": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e"
+        },
+        "NOTICE": {
+          "bytes": 1675,
+          "sha256": "826e13722b796bb0d4ed003e94e01b3892e867d6bec94b408dda3818626c75e4"
+        },
+        "README.md": {
+          "bytes": 10710,
+          "sha256": "423190f451f7963450f3e7b50a8c5b523319b8433c175c7e1cf1e9f0b7213948"
+        },
+        "backbone_config.json": {
+          "bytes": 1592,
+          "sha256": "67af2ff3d48fd9604ba0232c7e3b72312fb3b2a41c52ecbd02c8ee0af8a81ffe"
+        },
+        "decision.safetensors": {
+          "bytes": 406439524,
+          "sha256": "939575a49ebebb24dd96b50c8a64deefb0066193f0649291b1766c61bff5e842"
+        },
+        "horscht_model.py": {
+          "bytes": 7506,
+          "sha256": "788b723417a800231f641ef69f5e4e523018fcf4e27ec0dadb08d25916e34a94"
+        },
+        "release_manifest.json": {
+          "bytes": 2212,
+          "sha256": "80af57d7e6214f7374f607e7de7aac428e8a61e53766021d7be0d777c9ec1ddb"
+        },
+        "requirements.txt": {
+          "bytes": 77,
+          "sha256": "ac77c44a05a36e4349debb924992fcb6c0cb7b49c694080f47edafe648e520e0"
+        },
+        "smoke_verification.json": {
+          "bytes": 586,
+          "sha256": "cf01f3e45ea5bef4a96cbe453344f4bef35d7a509cd571cf68d96353e633a2ba"
+        },
+        "tokenizer/chat_template.jinja": {
+          "bytes": 4168,
+          "sha256": "a55ee1b1660128b7098723e0abcd92caa0788061051c62d51cbe87d9cf1974d8"
+        },
+        "tokenizer/tokenizer.json": {
+          "bytes": 11422818,
+          "sha256": "8579e1ca7cc5d82a9e0202eed555529996f4ffe7f563c2979a0290cf3db452d3"
+        },
+        "tokenizer/tokenizer_config.json": {
+          "bytes": 693,
+          "sha256": "c4f4c62b741ab2940841480f9942f378d7d3878d47c2babb862af7381c59b952"
+        }
+      }
+    },
+    {
+      "type": "dataset",
+      "repo_id": "NicolasMahn/horscht-decisions-v0.1",
+      "revision": "b840eb9cbf12dca16ad0331fe6f0404738823682",
+      "url": "https://huggingface.co/datasets/NicolasMahn/horscht-decisions-v0.1",
+      "files": {
+        "LICENSE": {
+          "bytes": 2145,
+          "sha256": "f7da10bb967ece54abc75233528032d6ea0a964f5f84483a0eaed8d8f40eae5b"
+        },
+        "LICENSES/Apache-2.0.txt": {
+          "bytes": 11343,
+          "sha256": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e"
+        },
+        "NOTICE.md": {
+          "bytes": 4791,
+          "sha256": "9639adbd29216f9d94c97908dcb461f2801c1a8f0999c694ba39c0747f794c22"
+        },
+        "README.md": {
+          "bytes": 7798,
+          "sha256": "d318a303f3bef070103a0d06535c02158147f2e908ba10ac71ac08d2cbdcce42"
+        },
+        "checksums.json": {
+          "bytes": 1150,
+          "sha256": "38b9c304812eeb11901a9fabf39912f1ad36ed05ba0381b19f7bea8c0f5d6f36"
+        },
+        "data/continuation/train.parquet": {
+          "bytes": 41438684,
+          "sha256": "4a48d53e3cab26a5c35e9044ec85576e5da90190c20016c0cb5d0f9736ef3ad9"
+        },
+        "data/continuation/validation.parquet": {
+          "bytes": 19468463,
+          "sha256": "dfa3853d1969c8a97fcfe43e0c95cdabf2c23131b9cabcb332454e30a4959139"
+        },
+        "data/warmstart/train.parquet": {
+          "bytes": 60380934,
+          "sha256": "fd55dd6c488b5b1328caf971f8fb0d67a84244f0be93c15cb4dc98b0cf9f776d"
+        },
+        "data/warmstart/validation.parquet": {
+          "bytes": 4723238,
+          "sha256": "d0a4574c070c1969e7af54fec6fbb97ef68f465879091f566d9a1b80fe53ace7"
+        },
+        "document-attribution.jsonl": {
+          "bytes": 2002280,
+          "sha256": "51e251de36bad0a16a832f95a524b07474488ada2b9947f4d775b4c115eb5b10"
+        },
+        "manifest.json": {
+          "bytes": 344086,
+          "sha256": "8b1967b4d965384c4001552933f9979ca63aaec09944b3b3c4bbdcacc79de723"
+        },
+        "public-source-manifest.json": {
+          "bytes": 4144,
+          "sha256": "3e61ca9c237f83691c6f3e198b107554803f0a82f35046546b869dc9e78eec16"
+        },
+        "verification.json": {
+          "bytes": 790,
+          "sha256": "c673232f6aec888262f22e65657a368e53ca72f10d87246766469fc823176fa7"
+        }
+      }
+    }
+  ]
+}

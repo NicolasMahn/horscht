@@ -6,7 +6,7 @@ linear decision head trained. See [the paper](../docs/paper/paper.md),
 
 Git stores code, documentation, notices, provenance and aggregate evidence.
 The 417.9 MB model package and approximately 128.4 MB dataset package are
-prepared locally for Hugging Face. They contain no external benchmark items
+published on Hugging Face. They contain no external benchmark items
 or sealed internal test/calibration rows.
 
 Verify the prepared payloads without uploading:
@@ -30,6 +30,18 @@ artifact hashes first, and records remote commit revisions and local file
 checksums in `publication-receipt.json`. It never uploads from the raw data or
 benchmark directories. An existing repository's visibility is not changed.
 
-Do not describe prepared artifacts as uploaded until that receipt records both
-remote commits. GitHub's existing repository remains private; pushing this
-release branch does not change its visibility.
+The release is public on [GitHub](https://github.com/NicolasMahn/horscht),
+with [reports on GitHub Pages](https://nicolasmahn.github.io/horscht/),
+[model weights](https://huggingface.co/NicolasMahn/horscht-qwen3-4b-v0.1), and
+[the dataset](https://huggingface.co/datasets/NicolasMahn/horscht-decisions-v0.1).
+See [STATUS.md](STATUS.md) for the verified publication state.
+
+Repeat anonymous download, checksum, and standalone CPU inference verification:
+
+```sh
+.venv/bin/python scripts/verify_published_release.py --output runs/publication-download-check
+```
+
+This checks the exact commits recorded in the publication receipt. It does not
+rerun benchmarks. GitHub Pages builds only the public report allowlist with
+`python3 scripts/build_pages.py`; weights and dataset rows stay on Hugging Face.

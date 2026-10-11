@@ -1,0 +1,35 @@
+{
+  "verified_at": "2026-10-11T20:14:31.971131+00:00",
+  "anonymous_downloads": true,
+  "repositories": [
+    {
+      "repo_id": "NicolasMahn/horscht-qwen3-4b-v0.1",
+      "type": "model",
+      "revision": "550f678ee4346e8c7fa6d99a835ba127fe077b51",
+      "files_verified": 14,
+      "bytes_verified": 417905476
+    },
+    {
+      "repo_id": "NicolasMahn/horscht-decisions-v0.1",
+      "type": "dataset",
+      "revision": "b840eb9cbf12dca16ad0331fe6f0404738823682",
+      "files_verified": 13,
+      "bytes_verified": 128389846
+    }
+  ],
+  "cpu_inference": {
+    "passed": true,
+    "example_source": "invented, not benchmark data",
+    "result": {
+      "choice_index": 0,
+      "probabilities": [
+        0.5527475476264954,
+        0.4472525119781494
+      ],
+      "input_tokens": 39,
+      "temperature": 1.0
+    },
+    "torch": "2.14.0+cpu"
+  },
+  "scope": "All published files downloaded anonymously and checksum verified; synthetic CPU inference, not a benchmark rerun."
+}

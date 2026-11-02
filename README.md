@@ -1,5 +1,7 @@
 # Horscht
 
+**Dependency security (2026-11-02):** `uv.lock` pins [Pillow 12.3.0](https://github.com/advisories/GHSA-8g5g-8vmr-9782) and [certifi 2026.7.22](https://github.com/advisories/GHSA-6q48-6c7w-9gw2), both affected by known vulnerabilities; dependency updates are pending.
+
 A research decision model built on **Qwen3-4B**. It reads a context, a question,
 and changing answer choices, then returns a probability distribution in one
 forward pass. It does not generate a reasoning trace.
